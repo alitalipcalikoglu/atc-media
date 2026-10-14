@@ -39,6 +39,7 @@ npm run typecheck
 - **Callers are trusted backends** holding an API key from `MEDIA_API_KEYS`. Browsers reach the service only through upload tickets and download URLs.
 - **Upload is a raw body.** `PUT` the bytes with `Content-Type` and optional `X-File-Name` (URL-encoded). No multipart. Browsers can do `fetch(url, { method: 'PUT', body: file })`.
 - **Type is sniffed, never trusted.** The first bytes decide the type; anything not in `ALLOWED_TYPES` is rejected with `415`. The stored name's extension is rewritten to match.
+- **Text data files are opt-in.** `text/csv` and `application/x-ndjson` (for data exports) are accepted only when listed in `ALLOWED_TYPES`, the declared name ends in `.csv` / `.ndjson` (bytes cannot tell them apart) and the leading bytes are valid UTF-8 text without control bytes; NDJSON must start with `{` or `[`. Magic bytes still win, and these files are always served as attachments.
 - **Images are re-encoded on upload** (`STRIP_IMAGE_METADATA=true`): EXIF, GPS and XMP are dropped, orientation is applied, the file becomes a clean encoder product. Decoding is capped at `MAX_IMAGE_PIXELS`.
 - **Storage is content-addressed.** Identical bytes are stored once; files are named references to a blob. Deleting a file is soft; bytes disappear after `DELETE_GRACE_DAYS`, when no file references the blob any more.
 - **Variants** are presets from `VARIANTS` (`thumb:200x200:cover`, `medium:800`, …), generated on first request, cached on disk, served as WebP, never enlarged.

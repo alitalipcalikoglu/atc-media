@@ -69,6 +69,30 @@ test('upload rejects unknown types, disallowed types, oversized and broken image
   }
 });
 
+test('text data types: csv/ndjson only when allowed, declared by extension and actually text', async () => {
+  const t = await testMediaService({ ALLOWED_TYPES: 'image/png,text/csv,application/x-ndjson' });
+  try {
+    const csv = await t.service.upload(streamOf('id,name\n1,"Ada, L."\n'), { apiKeyId: 'k', name: 'users.csv' });
+    assert.deepEqual([csv.mime, csv.name], ['text/csv', 'users.csv']);
+    const nd = await t.service.upload(streamOf('{"a":1}\n{"a":2}\n'), { apiKeyId: 'k', name: 'x.NDJSON' });
+    assert.equal(nd.mime, 'application/x-ndjson');
+    await rejectsWith(t.service.upload(streamOf('id,name\n'), { apiKeyId: 'k', name: 'users.txt' }), 'UNSUPPORTED_TYPE');
+    await rejectsWith(t.service.upload(streamOf('not json\n'), { apiKeyId: 'k', name: 'x.ndjson' }), 'UNSUPPORTED_TYPE');
+    await rejectsWith(t.service.upload(streamOf(Buffer.from([0x61, 0x00, 0x62])), { apiKeyId: 'k', name: 'x.csv' }), 'UNSUPPORTED_TYPE');
+    await rejectsWith(t.service.upload(streamOf(Buffer.from([0x61, 0xff, 0xfe, 0x62])), { apiKeyId: 'k', name: 'x.csv' }), 'UNSUPPORTED_TYPE');
+    const png = await testImage({ width: 8, height: 8, format: 'png' });
+    assert.equal((await t.service.upload(streamOf(png), { apiKeyId: 'k', name: 'evil.csv' })).mime, 'image/png', 'magic bytes still win');
+  } finally {
+    t.cleanup();
+  }
+  const strict = await testMediaService({ ALLOWED_TYPES: 'image/png' });
+  try {
+    await rejectsWith(strict.service.upload(streamOf('id\n1\n'), { apiKeyId: 'k', name: 'a.csv' }), 'UNSUPPORTED_TYPE');
+  } finally {
+    strict.cleanup();
+  }
+});
+
 test('tickets: constrained single-use upload with release on failure', async () => {
   const t = await testMediaService();
   try {

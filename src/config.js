@@ -42,7 +42,7 @@ export class Config {
   static MIN_SECRET_LENGTH = 32;
   static DEFAULT_TYPES = 'image/jpeg,image/png,image/webp,image/gif,image/avif,application/pdf';
   static DEFAULT_VARIANTS = 'thumb:200x200:cover,small:400,medium:800,large:1600';
-  static KNOWN_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml', 'application/pdf']);
+  static KNOWN_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml', 'application/pdf', 'text/csv', 'application/x-ndjson']);
 
   /** @param {import('./types.js').ConfigValues} v */
   constructor(v) {

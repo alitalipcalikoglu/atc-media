@@ -9,8 +9,11 @@ export class TypeSniffer {
   /** @type {Record<string, string>} */
   static EXTENSIONS = {
     'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif',
-    'image/svg+xml': 'svg', 'application/pdf': 'pdf',
+    'image/svg+xml': 'svg', 'application/pdf': 'pdf', 'text/csv': 'csv', 'application/x-ndjson': 'ndjson',
   };
+
+  /** Text data types: bytes cannot tell them apart, so the declared file extension picks one. */
+  static TEXT_TYPES = { csv: 'text/csv', ndjson: 'application/x-ndjson' };
 
   /**
    * @param {Buffer} head At least the first {@link HEAD_BYTES} bytes (or the whole file if shorter).
@@ -29,6 +32,25 @@ export class TypeSniffer {
     const text = head.toString('utf8').replace(/^﻿/, '').trimStart();
     if (/^<\?xml[\s\S]{0,200}?<svg[\s>]/i.test(text) || /^<svg[\s>]/i.test(text)) return 'image/svg+xml';
     return null;
+  }
+
+  /**
+   * Text data type for a file the byte sniffer did not recognise: only when the declared name ends
+   * in `.csv` / `.ndjson` and the leading bytes are text (no NUL, no other control bytes besides
+   * tab/CR/LF, valid UTF-8). NDJSON must also start with `{` or `[`. Never inline-renderable.
+   * @param {Buffer} head
+   * @param {string|null|undefined} name Client-declared file name.
+   * @returns {string|null}
+   */
+  static textType(head, name) {
+    const ext = /\.([A-Za-z0-9]{1,8})$/.exec(name ?? '')?.[1]?.toLowerCase() ?? '';
+    const mime = /** @type {Record<string, string>} */ (TypeSniffer.TEXT_TYPES)[ext];
+    if (!mime) return null;
+    if (head.some((b) => b < 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d) || head.includes(0x7f)) return null;
+    // A full head may end inside a multi-byte character: stream mode tolerates only that, never invalid bytes.
+    try { new TextDecoder('utf-8', { fatal: true }).decode(head, { stream: head.length >= TypeSniffer.HEAD_BYTES }); } catch { return null; }
+    if (mime === 'application/x-ndjson' && head.length && !/^\s*[[{]/.test(head.toString('utf8').replace(/^\uFEFF/, ''))) return null;
+    return mime;
   }
 
   /** @param {string} mime */

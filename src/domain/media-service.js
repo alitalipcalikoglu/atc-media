@@ -114,7 +114,7 @@ export class MediaService {
     }
     let { key: tempKey, sha256, size } = received;
     try {
-      const mime = TypeSniffer.sniff(received.head);
+      const mime = TypeSniffer.sniff(received.head) ?? TypeSniffer.textType(received.head, o.name);
       if (!mime || !allowed.includes(mime)) {
         throw new MediaError('UNSUPPORTED_TYPE', mime ? `type ${mime} is not allowed` : 'file type not recognised', { allowed });
       }
