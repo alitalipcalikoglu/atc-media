@@ -15,13 +15,13 @@ One event per completed write request, `outcome: "success"` for 2xx, `outcome: "
 
 | Action | Request |
 |---|---|
-| `media.file.upload` | `PUT /v1/files` |
-| `media.file.update` | `PATCH /v1/files/:id` |
-| `media.file.delete` | `DELETE /v1/files/:id` |
-| `media.file.restore` | `POST /v1/files/:id/restore` |
-| `media.upload.ticket` | `POST /v1/uploads` |
+| `atc-media.file.upload` | `PUT /v1/files` |
+| `atc-media.file.update` | `PATCH /v1/files/:id` |
+| `atc-media.file.delete` | `DELETE /v1/files/:id` |
+| `atc-media.file.restore` | `POST /v1/files/:id/restore` |
+| `atc-media.upload.ticket` | `POST /v1/uploads` |
 
-For `media.upload.ticket` the target is `{ type: "ticket", id: <sha256 hex of the token> }`, the same hash the ticket is stored under. The plaintext token is never forwarded.
+For `atc-media.upload.ticket` the target is `{ type: "ticket", id: <sha256 hex of the token> }`, the same hash the ticket is stored under. The plaintext token is never forwarded.
 
 ## Event shape
 
@@ -29,7 +29,7 @@ For `media.upload.ticket` the target is `{ type: "ticket", id: <sha256 hex of th
 {
   "id": "0f1a…",
   "at": "2026-09-17T10:00:00.000Z",
-  "action": "media.file.upload",
+  "action": "atc-media.file.upload",
   "outcome": "success",
   "actor": { "type": "apikey", "id": "console" },
   "target": { "type": "…", "id": "…" },

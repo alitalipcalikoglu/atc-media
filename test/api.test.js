@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import sharp from 'sharp';
-import { readServiceVersion } from '@atc-web/service-core/fastify';
+import { readServiceVersion } from '@atc-web/atc-service-core/fastify';
 import { MediaApi } from '../src/http/media-api.js';
 import { API_KEY, OTHER_KEY, silentLog, testImage, testMediaService } from './helpers.js';
 
@@ -42,7 +42,7 @@ test('GET /v1/info reports service identity and current capabilities', async () 
   const res = await app.inject('/v1/info');
   assert.equal(res.statusCode, 200);
   const body = res.json();
-  assert.equal(body.service, 'media');
+  assert.equal(body.service, 'atc-media');
   assert.equal(body.version, PACKAGE_VERSION);
   assert.equal(body.apiVersion, 'v1');
   assert.deepEqual(body.capabilities, ['content-dedup', 'signed-urls', 'ticketed-uploads', 'soft-delete', 'variants']);

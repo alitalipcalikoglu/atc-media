@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { AuditClient } from '@atc-web/service-core/audit';
+import { AuditClient } from '@atc-web/atc-service-core/audit';
 
 const silent = { warn() {}, error() {} };
 
@@ -31,7 +31,7 @@ test('AuditClient: buffers, batches with idempotent ids, retries, drops rejected
   assert.equal(off.enabled, false);
 });
 
-test('media.upload.ticket audits the ticket hash, never the plaintext single-use token', async () => {
+test('atc-media.upload.ticket audits the ticket hash, never the plaintext single-use token', async () => {
   const { MediaApi } = await import('../src/http/media-api.js');
   const { TicketStore } = await import('../src/store/ticket-store.js');
   const { API_KEY, silentLog, testMediaService } = await import('./helpers.js');
@@ -43,7 +43,7 @@ test('media.upload.ticket audits the ticket hash, never the plaintext single-use
     const res = await app.inject({ method: 'POST', url: '/v1/uploads', payload: {}, headers: { authorization: `Bearer ${API_KEY}` } });
     assert.equal(res.statusCode, 201);
     const { token } = res.json();
-    const ticket = events.find((e) => e.action === 'media.upload.ticket');
+    const ticket = events.find((e) => e.action === 'atc-media.upload.ticket');
     assert.deepEqual(ticket.target, { type: 'ticket', id: TicketStore.hash(token) });
     assert.ok(!JSON.stringify(events).includes(token), 'the plaintext token never reaches an audit event');
   } finally {

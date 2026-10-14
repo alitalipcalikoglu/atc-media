@@ -1,7 +1,7 @@
 import { Config, ConfigError } from './config.js';
-import { AuditClient } from '@atc-web/service-core/audit';
-import { readServiceVersion } from '@atc-web/service-core/fastify';
-import { Lifecycle } from '@atc-web/service-core/lifecycle';
+import { AuditClient } from '@atc-web/atc-service-core/audit';
+import { readServiceVersion } from '@atc-web/atc-service-core/fastify';
+import { Lifecycle } from '@atc-web/atc-service-core/lifecycle';
 import { Database } from './db.js';
 import { ImageProcessor } from './domain/image-processor.js';
 import { MediaService } from './domain/media-service.js';
@@ -66,7 +66,7 @@ export class Application {
     });
     const app = await new MediaApi({ config, audit: this.audit, service, db: this.db, files: this.files, version: this.version }).build();
     this.app = app;
-    service.log = app.log.child({ component: 'media' });
+    service.log = app.log.child({ component: 'atc-media' });
     this.maintenance = new Maintenance({ service, log: app.log.child({ component: 'maintenance' }) });
     const { shutdown } = Lifecycle.install({
       forceExitMs: 60_000,

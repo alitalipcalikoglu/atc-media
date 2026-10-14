@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: media
+  title: atc-media
   version: 1.1.0
   description: |
     Media service: authenticated uploads, content-addressed storage, image normalisation and
@@ -36,7 +36,7 @@ tags:
 paths:
   /openapi.yaml:
     get:
-      operationId: media.openapi
+      operationId: atc-media.openapi
       summary: Download the canonical OpenAPI document
       description: Returns this service's repository-root OpenAPI 3.1 document byte-for-byte.
       security: []
@@ -49,7 +49,7 @@ paths:
 
   /health:
     get:
-      operationId: media.ops.health
+      operationId: atc-media.ops.health
       tags: [Operations]
       summary: Liveness probe
       description: Always `200`. Performs no dependency check — see `GET /ready` for that.
@@ -68,7 +68,7 @@ paths:
 
   /ready:
     get:
-      operationId: media.ops.ready
+      operationId: atc-media.ops.ready
       tags: [Operations]
       summary: Readiness probe
       description: |
@@ -99,7 +99,7 @@ paths:
 
   /v1/info:
     get:
-      operationId: media.ops.info
+      operationId: atc-media.ops.info
       tags: [Operations]
       summary: Service and API contract identification
       security: []
@@ -125,11 +125,11 @@ paths:
                       these instance-variable.
                     example: [content-dedup, signed-urls, ticketed-uploads, soft-delete, variants]
                   schemaVersion: { type: integer, description: "SQLite `PRAGMA user_version` of the open database." }
-                  serviceCore: { type: string, description: Installed `@atc-web/service-core` version actually running. }
+                  serviceCore: { type: string, description: Installed `@atc-web/atc-service-core` version actually running. }
 
   /v1/files:
     put:
-      operationId: media.files.upload
+      operationId: atc-media.files.upload
       tags: [Files]
       summary: Upload a file
       description: |
@@ -204,7 +204,7 @@ paths:
           $ref: '#/components/responses/RateLimited'
 
     get:
-      operationId: media.files.list
+      operationId: atc-media.files.list
       tags: [Files]
       summary: List files owned by the calling API key
       description: |
@@ -245,7 +245,7 @@ paths:
 
   /v1/files/{id}:
     get:
-      operationId: media.files.get
+      operationId: atc-media.files.get
       tags: [Files]
       summary: Get a file's metadata
       security:
@@ -274,7 +274,7 @@ paths:
           $ref: '#/components/responses/RateLimited'
 
     patch:
-      operationId: media.files.patch
+      operationId: atc-media.files.patch
       tags: [Files]
       summary: Update a file's visibility and/or name
       security:
@@ -313,7 +313,7 @@ paths:
           $ref: '#/components/responses/RateLimited'
 
     delete:
-      operationId: media.files.delete
+      operationId: atc-media.files.delete
       tags: [Files]
       summary: Soft-delete a file
       description: |
@@ -340,7 +340,7 @@ paths:
 
   /v1/files/{id}/restore:
     post:
-      operationId: media.files.restore
+      operationId: atc-media.files.restore
       tags: [Files]
       summary: Undo a soft delete
       description: Only works within the `DELETE_GRACE_DAYS` grace window, before bytes are physically purged.
@@ -371,7 +371,7 @@ paths:
 
   /v1/files/{id}/urls:
     post:
-      operationId: media.files.signUrls
+      operationId: atc-media.files.signUrls
       tags: [Files]
       summary: (Re-)sign delivery URLs for a file
       description: |
@@ -417,7 +417,7 @@ paths:
 
   /v1/uploads:
     post:
-      operationId: media.tickets.create
+      operationId: atc-media.tickets.create
       tags: [Uploads]
       summary: Issue a single-use upload ticket
       description: |
@@ -460,7 +460,7 @@ paths:
 
   /v1/uploads/{token}:
     put:
-      operationId: media.files.uploadTicketed
+      operationId: atc-media.files.uploadTicketed
       tags: [Uploads]
       summary: Upload against a single-use ticket
       description: |
@@ -536,7 +536,7 @@ paths:
 
   /files/{id}/{variant}:
     get:
-      operationId: media.files.deliver
+      operationId: atc-media.files.deliver
       tags: [Delivery]
       summary: Deliver a file's original bytes or an image variant
       description: |
@@ -670,7 +670,7 @@ paths:
 
   /metrics:
     get:
-      operationId: media.ops.metrics
+      operationId: atc-media.ops.metrics
       tags: [Operations]
       summary: Prometheus text-format metrics
       description: |
