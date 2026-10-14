@@ -10,7 +10,7 @@ export class TypeSniffer {
   static EXTENSIONS = {
     'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif',
     'image/svg+xml': 'svg', 'application/pdf': 'pdf', 'text/csv': 'csv', 'application/x-ndjson': 'ndjson',
-    'application/vnd.sqlite3': 'sqlite',
+    'application/vnd.sqlite3': 'sqlite', 'application/gzip': 'gz', 'application/vnd.atc-backup': 'atcbk',
   };
 
   /** Text data types: bytes cannot tell them apart, so the declared file extension picks one. */
@@ -31,6 +31,8 @@ export class TypeSniffer {
     }
     if (head.length >= 5 && head.subarray(0, 5).toString('latin1') === '%PDF-') return 'application/pdf';
     if (head.length >= 16 && head.subarray(0, 16).toString('latin1') === 'SQLite format 3\0') return 'application/vnd.sqlite3';
+    if (head.length >= 2 && head[0] === 0x1f && head[1] === 0x8b) return 'application/gzip';
+    if (head.length >= 7 && head.subarray(0, 7).toString('latin1') === 'ATCBK1\n') return 'application/vnd.atc-backup';
     const text = head.toString('utf8').replace(/^﻿/, '').trimStart();
     if (/^<\?xml[\s\S]{0,200}?<svg[\s>]/i.test(text) || /^<svg[\s>]/i.test(text)) return 'image/svg+xml';
     return null;

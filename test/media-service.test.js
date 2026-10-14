@@ -169,6 +169,26 @@ test('sqlite database files: recognised by header, only when allowed, stored wit
   }
 });
 
+test('archive and encrypted backup files: recognised by their leading bytes, only when allowed', async () => {
+  const gz = Buffer.concat([Buffer.from([0x1f, 0x8b, 0x08, 0x00]), Buffer.alloc(100)]);
+  const enc = Buffer.concat([Buffer.from('ATCBK1\n', 'latin1'), Buffer.alloc(100)]);
+  const t = await testMediaService({ ALLOWED_TYPES: 'image/png,application/gzip,application/vnd.atc-backup' });
+  try {
+    const a = await t.service.upload(streamOf(gz), { apiKeyId: 'k', name: 'keys.tar.gz' });
+    const b = await t.service.upload(streamOf(enc), { apiKeyId: 'k', name: 'app.db.enc' });
+    assert.deepEqual([a.mime, a.name, b.mime, b.name], ['application/gzip', 'keys.tar.gz', 'application/vnd.atc-backup', 'app.db.atcbk']);
+  } finally {
+    t.cleanup();
+  }
+  const strict = await testMediaService({ ALLOWED_TYPES: 'image/png' });
+  try {
+    await rejectsWith(strict.service.upload(streamOf(gz), { apiKeyId: 'k', name: 'x.gz' }), 'UNSUPPORTED_TYPE');
+    await rejectsWith(strict.service.upload(streamOf(enc), { apiKeyId: 'k', name: 'x.enc' }), 'UNSUPPORTED_TYPE');
+  } finally {
+    strict.cleanup();
+  }
+});
+
 test('per-key upload limits: a key may have its own limit above or below MAX_UPLOAD_BYTES', async () => {
   const t = await testMediaService({ MAX_UPLOAD_BYTES: '2048' });
   try {
