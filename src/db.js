@@ -41,8 +41,7 @@ export class Database extends CoreDatabase {
     CREATE INDEX upload_tickets_expiry ON upload_tickets (expires_at);
     `,
     `
-    -- Stage 8.1: closes the purge-vs-concurrent-upload-of-the-same-content race (P0, see
-    -- IMPLEMENTATION_PLAN.md Stage 0 — planned there, never actually implemented). A blob row is
+    -- Stage 8.1: closes the purge-vs-concurrent-upload-of-the-same-content race. A blob row is
     -- never deleted outright the moment it's found orphaned; it's first marked with a token
     -- (two-phase: mark, then a later/separate finalize re-confirms via compare-and-swap on this
     -- same token before the row — and only then the bytes — are actually removed). Any upload
