@@ -10,6 +10,7 @@ export class TypeSniffer {
   static EXTENSIONS = {
     'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif',
     'image/svg+xml': 'svg', 'application/pdf': 'pdf', 'text/csv': 'csv', 'application/x-ndjson': 'ndjson',
+    'application/vnd.sqlite3': 'sqlite',
   };
 
   /** Text data types: bytes cannot tell them apart, so the declared file extension picks one. */
@@ -29,6 +30,7 @@ export class TypeSniffer {
       if (brand === 'avif' || brand === 'avis') return 'image/avif';
     }
     if (head.length >= 5 && head.subarray(0, 5).toString('latin1') === '%PDF-') return 'application/pdf';
+    if (head.length >= 16 && head.subarray(0, 16).toString('latin1') === 'SQLite format 3\0') return 'application/vnd.sqlite3';
     const text = head.toString('utf8').replace(/^﻿/, '').trimStart();
     if (/^<\?xml[\s\S]{0,200}?<svg[\s>]/i.test(text) || /^<svg[\s>]/i.test(text)) return 'image/svg+xml';
     return null;

@@ -151,3 +151,20 @@ test('variants are generated once and cached; delete, restore and purge remove b
     t.cleanup();
   }
 });
+
+test('sqlite database files: recognised by header, only when allowed, stored with a .sqlite name', async () => {
+  const bytes = Buffer.concat([Buffer.from('SQLite format 3\0', 'latin1'), Buffer.alloc(4080)]);
+  const t = await testMediaService({ ALLOWED_TYPES: 'image/png,application/vnd.sqlite3' });
+  try {
+    const f = await t.service.upload(streamOf(bytes), { apiKeyId: 'k', name: 'queue-2026.db' });
+    assert.deepEqual([f.mime, f.name], ['application/vnd.sqlite3', 'queue-2026.sqlite']);
+  } finally {
+    t.cleanup();
+  }
+  const strict = await testMediaService({ ALLOWED_TYPES: 'image/png' });
+  try {
+    await rejectsWith(strict.service.upload(streamOf(bytes), { apiKeyId: 'k', name: 'x.db' }), 'UNSUPPORTED_TYPE');
+  } finally {
+    strict.cleanup();
+  }
+});
