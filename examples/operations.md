@@ -57,7 +57,7 @@ pm2 reload media
 
 ```bash
 docker build -t atc-media .
-docker run -d -p 3003:3003 -v media-data:/data --env-file .env atc-media
+docker run -d -p 3003:3003 -v atc-media-data:/data --env-file .env atc-media
 ```
 
 `/data` holds both `media.db` and the files; back it up as a unit.

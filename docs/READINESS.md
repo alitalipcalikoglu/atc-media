@@ -108,7 +108,7 @@ Also parses an inbound `traceparent` via `@atc-web/atc-service-core`'s `register
 trust-gated on `TRUST_PROXY` (same boundary as `X-Forwarded-*`): trusted, the caller's trace-id is
 continued with a fresh span-id; untrusted or malformed, a fresh trace is started. Both
 `traceId`/`spanId` are logged on every request line. See
-[OBSERVABILITY.md](../../stack/docs/OBSERVABILITY.md).
+[OBSERVABILITY.md](../../atc-stack/docs/OBSERVABILITY.md).
 
 ## Security model
 
@@ -275,6 +275,6 @@ late — never touches a live file's object or its (possibly freshly-regenerated
 - `trash/` (Stage 8.2 quarantine): a crash between `detachForDelete` and `discardDetached` still
   leaks a quarantined copy there, same as always — but every maintenance pass now reconciles it
   automatically past `TRASH_GRACE_MS` (post-production Phase 4; see "Trash reconciliation" above),
-  not a permanent leak in this build any more. Deliberately excluded from `stack`'s backup/restore
+  not a permanent leak in this build any more. Deliberately excluded from `atc-stack`'s backup/restore
   (`Snapshot` only ever captures `objects`/`variants`): nothing live ever points into `trash/`, so
   it is disposable orphaned data, not state to preserve.

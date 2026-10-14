@@ -1,6 +1,6 @@
 # Audit events
 
-Set both variables to forward events to the audit service (repository `audit`); leave both empty to keep the service silent:
+Set both variables to forward events to the audit service (repository `atc-audit`); leave both empty to keep the service silent:
 
 ```
 AUDIT_URL=http://10.0.0.5:3005
@@ -31,7 +31,7 @@ For `atc-media.upload.ticket` the target is `{ type: "ticket", id: <sha256 hex o
   "at": "2026-09-17T10:00:00.000Z",
   "action": "atc-media.file.upload",
   "outcome": "success",
-  "actor": { "type": "apikey", "id": "console" },
+  "actor": { "type": "apikey", "id": "atc-console" },
   "target": { "type": "…", "id": "…" },
   "ip": "203.0.113.7",
   "userAgent": "…",
@@ -40,4 +40,4 @@ For `atc-media.upload.ticket` the target is `{ type: "ticket", id: <sha256 hex o
 }
 ```
 
-`meta` carries the request patch or a summary (counts) where useful; secrets never appear in it. Query the audit service by `source=media`, `actionPrefix=media.` or by target to reconstruct what happened to an entity.
+`meta` carries the request patch or a summary (counts) where useful; secrets never appear in it. Query the audit service by `source=atc-media`, `actionPrefix=atc-media.` or by target to reconstruct what happened to an entity.

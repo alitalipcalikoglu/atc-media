@@ -24,7 +24,7 @@ Production with Docker (mount the data volume; it holds both the database and th
 
 ```bash
 docker build -t atc-media .
-docker run -p 3003:3003 -v media-data:/data --env-file .env atc-media
+docker run -p 3003:3003 -v atc-media-data:/data --env-file .env atc-media
 ```
 
 Tests and type check:
@@ -207,7 +207,7 @@ Accepts an inbound `X-Request-Id` unconditionally and logs it via Fastify's defa
 logging. Also parses an inbound `traceparent`, trusted only when `TRUST_PROXY=true` — the caller's
 trace-id is continued with a fresh span-id for this hop, both logged as `traceId`/`spanId` via
 `@atc-web/atc-service-core`'s `registerRequestContext`. See
-[OBSERVABILITY.md](../stack/docs/OBSERVABILITY.md).
+[OBSERVABILITY.md](../atc-stack/docs/OBSERVABILITY.md).
 
 ## Maintenance
 
@@ -218,13 +218,13 @@ startup, and an operator-triggered manual run. There is **no HTTP route** for th
 media's API keys are flat (`id:secret`, no role concept, shared identically by every `/v1/*` route
 including delivery and `/metrics`), so an admin-only route here would either blur that boundary or
 require inventing a role concept for one operation. The manual trigger instead goes through the
-`stack` control plane, the same trust boundary `stack backup`/`stack restore` already assume:
+`atc-stack` control plane, the same trust boundary `stack backup`/`stack restore` already assume:
 
 ```bash
 stack maintenance media
 ```
 
-(or `Stack#maintenance('media')` from code). This constructs the real `Config`/`Database`/
+(or `Stack#maintenance('atc-media')` from code). This constructs the real `Config`/`Database`/
 `LocalStorage`/`FileStore`/`TicketStore`/`MediaService`/`Maintenance` graph directly against the
 service's own `.env`/data directory — the same classes `Application#start` wires, minus the HTTP
 listener — and calls the real `Maintenance#run('manual')`. It never calls `LocalStorage#prepare()`
@@ -253,7 +253,7 @@ expected or the reverse) is skipped and counted, never deleted, never followed.
 
 Back up the database and the `objects`/`variants` directories from the same snapshot — restoring
 only one half produces a database row pointing at a missing file, or an orphaned file with no row.
-`stack backup`/`stack restore` from the workspace root (see `stack/docs/UPGRADE.md`) captures the
+`stack backup`/`stack restore` from the workspace root (see `atc-stack/docs/UPGRADE.md`) captures the
 database and both directories together for exactly this reason; a database-only backup is never a
 complete backup of this service. `tmp/` (in-flight uploads) is never included — it is safe to lose
 and is cleared on the next start anyway. On every start, before applying a pending migration to an
