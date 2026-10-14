@@ -137,7 +137,7 @@ still in the wild was generated.
 ## Security notes
 
 - API keys compared in constant time; per-key rate limit; unknown query fields rejected.
-- Upload limits: `MAX_UPLOAD_BYTES` enforced while streaming (the connection is cut, nothing is kept), `MAX_IMAGE_PIXELS` before any decode.
+- Upload limits: `MAX_UPLOAD_BYTES` enforced while streaming (the connection is cut, nothing is kept), `MAX_IMAGE_PIXELS` before any decode. `KEY_MAX_UPLOAD_BYTES=id:bytes,…` gives one API key its own limit above or below the default (the stack gives the backup service 1 GiB so database copies fit); tickets and uploads of that key are checked against it.
 - Only sniffed, allow-listed types are stored. SVG is off by default (scriptable); if enabled it is served as an attachment inside a sandboxed CSP.
 - Re-encoding images removes metadata (location, device, author) and neutralises polyglot payloads.
 - Names are sanitised (no path separators, control characters or quotes), length-capped, and get the real extension. `Content-Disposition` carries an ASCII fallback plus RFC 6266 `filename*`.

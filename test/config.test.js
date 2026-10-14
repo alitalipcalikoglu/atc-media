@@ -50,3 +50,10 @@ test('Stage 8: MAX_CONCURRENT_VARIANTS and VARIANT_WAIT_TIMEOUT_MS have sane def
   assert.throws(() => Config.fromEnv({ ...fullEnv(), MAX_CONCURRENT_VARIANTS: '0' }), ConfigError);
   assert.throws(() => Config.fromEnv({ ...fullEnv(), VARIANT_WAIT_TIMEOUT_MS: '100' }), ConfigError);
 });
+
+test('Config: KEY_MAX_UPLOAD_BYTES maps key ids to limits and rejects unknown keys', () => {
+  const base = { ...fullEnv(), MEDIA_API_KEYS: `a:${'a'.repeat(40)},b:${'b'.repeat(40)}` };
+  assert.deepEqual({ ...Config.fromEnv({ ...base, KEY_MAX_UPLOAD_BYTES: 'b:1073741824' }).keyMaxUploadBytes }, { b: 1073741824 });
+  assert.throws(() => Config.fromEnv({ ...base, KEY_MAX_UPLOAD_BYTES: 'ghost:5000' }), (e) => e instanceof ConfigError && /unknown key "ghost"/.test(e.message));
+  assert.throws(() => Config.fromEnv({ ...base, KEY_MAX_UPLOAD_BYTES: 'a:12' }), ConfigError);
+});

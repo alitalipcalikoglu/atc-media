@@ -64,6 +64,7 @@ export class Config {
     this.maxConcurrentVariants = v.maxConcurrentVariants;
     this.variantWaitTimeoutMs = v.variantWaitTimeoutMs;
     this.maxUploadBytes = v.maxUploadBytes;
+    this.keyMaxUploadBytes = Object.freeze({ ...v.keyMaxUploadBytes });
     this.maxImagePixels = v.maxImagePixels;
     this.allowedTypes = v.allowedTypes;
     this.variants = v.variants;
@@ -131,6 +132,7 @@ export class Config {
       maxConcurrentVariants: r.integer('MAX_CONCURRENT_VARIANTS', 4, { min: 1, max: 64 }),
       variantWaitTimeoutMs: r.integer('VARIANT_WAIT_TIMEOUT_MS', 30_000, { min: 1_000, max: 300_000 }),
       maxUploadBytes: r.integer('MAX_UPLOAD_BYTES', 25 * 1024 * 1024, { min: 1024 }),
+      keyMaxUploadBytes: Config.#parseKeyLimits(r.optional('KEY_MAX_UPLOAD_BYTES'), Config.#parseApiKeys(r.required('MEDIA_API_KEYS')).map((k) => k.id)),
       maxImagePixels: r.integer('MAX_IMAGE_PIXELS', 50_000_000, { min: 10_000 }),
       allowedTypes,
       variants: VariantPreset.parseList(r.optional('VARIANTS') || Config.DEFAULT_VARIANTS),
@@ -147,6 +149,24 @@ export class Config {
       trashMaxEntries: r.integer('TRASH_MAX_ENTRIES', 1_000, { min: 1, max: 100_000 }),
       corsOrigins,
     });
+  }
+
+  /**
+   * `id:bytes,id:bytes`: an upload limit for one API key, above or below MAX_UPLOAD_BYTES (a backup
+   * service needs far more than an avatar uploader). Every id must be a configured key.
+   * @param {string} raw @param {string[]} keyIds @returns {Record<string, number>}
+   */
+  static #parseKeyLimits(raw, keyIds) {
+    /** @type {Record<string, number>} */
+    const out = {};
+    for (const entry of raw.split(',').map((x) => x.trim()).filter(Boolean)) {
+      const [id, n, ...rest] = entry.split(':');
+      const bytes = Number(n);
+      if (rest.length || !id || !/^\d+$/.test(n ?? '') || bytes < 1024) throw new ConfigError(`KEY_MAX_UPLOAD_BYTES entry "${entry}" must be id:bytes (at least 1024)`);
+      if (!keyIds.includes(id)) throw new ConfigError(`KEY_MAX_UPLOAD_BYTES names unknown key "${id}"`);
+      out[id] = bytes;
+    }
+    return out;
   }
 
   /**

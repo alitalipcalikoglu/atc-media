@@ -71,7 +71,8 @@ export class MediaApi {
       ...(config.tls ? { https: { cert: readFileSync(config.tls.certPath), key: readFileSync(config.tls.keyPath), minVersion: 'TLSv1.2' } } : {}),
       ...requestOptions({ logger: this.logger, logLevel: config.logLevel }),
       trustProxy: config.trustProxy,
-      bodyLimit: config.maxUploadBytes + 1024,
+      // The largest limit any key may have; each upload is then checked against its own key's limit.
+      bodyLimit: Math.max(config.maxUploadBytes, ...Object.values(config.keyMaxUploadBytes)) + 1024,
       ajv: { customOptions: { removeAdditional: false, coerceTypes: false } },
     });
     // Uploads arrive as raw bodies of any type; hand the stream through untouched.

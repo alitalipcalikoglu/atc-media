@@ -168,3 +168,18 @@ test('sqlite database files: recognised by header, only when allowed, stored wit
     strict.cleanup();
   }
 });
+
+test('per-key upload limits: a key may have its own limit above or below MAX_UPLOAD_BYTES', async () => {
+  const t = await testMediaService({ MAX_UPLOAD_BYTES: '2048' });
+  try {
+    t.service.options.keyMaxUploadBytes = { big: 8192, small: 1500 };
+    assert.equal(t.service.limitFor('big'), 8192);
+    assert.equal(t.service.limitFor('other'), 2048);
+    await rejectsWith(t.service.upload(streamOf(Buffer.alloc(4000)), { apiKeyId: 'other', name: 'a.bin' }), 'TOO_LARGE');
+    await rejectsWith(t.service.upload(streamOf(Buffer.alloc(2000)), { apiKeyId: 'small', name: 'a.bin' }), 'TOO_LARGE');
+    assert.throws(() => t.service.createTicket({ apiKeyId: 'small', maxBytes: 1600 }), /maxBytes must be 1\.\.1500/);
+    assert.equal(t.service.createTicket({ apiKeyId: 'big', maxBytes: 8000 }).maxBytes, 8000);
+  } finally {
+    t.cleanup();
+  }
+});

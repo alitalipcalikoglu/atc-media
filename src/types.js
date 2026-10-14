@@ -34,6 +34,7 @@
  * @property {number} maxConcurrentVariants   Bounded CPU-heavy variant generations at once, process-wide.
  * @property {number} variantWaitTimeoutMs    Bound on how long a new (non-deduped) generation waits for a free slot.
  * @property {number} maxUploadBytes
+ * @property {Record<string, number>} keyMaxUploadBytes  Per-key override of maxUploadBytes (key id to bytes).
  * @property {number} maxImagePixels
  * @property {string[]} allowedTypes
  * @property {VariantSpec[]} variants

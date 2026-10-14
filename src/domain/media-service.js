@@ -30,6 +30,7 @@ import { Semaphore, SemaphoreQueueFullError, SemaphoreTimeoutError } from './sem
  * @typedef {object} MediaServiceOptions
  * @property {string} publicBaseUrl
  * @property {number} maxUploadBytes
+ * @property {Record<string, number>} [keyMaxUploadBytes]
  * @property {string[]} allowedTypes
  * @property {VariantSpec[]} variants
  * @property {boolean} stripImageMetadata
@@ -95,6 +96,11 @@ export class MediaService {
 
   // ---------------------------------------------------------------- upload
 
+  /** The upload limit of one API key: its own override, else MAX_UPLOAD_BYTES. @param {string} [apiKeyId] */
+  limitFor(apiKeyId) {
+    return (apiKeyId && this.options.keyMaxUploadBytes?.[apiKeyId]) || this.options.maxUploadBytes;
+  }
+
   /**
    * Store an uploaded stream. Sniffs the real type, rejects anything not allowed, validates and
    * (by default) re-encodes images, then records a file pointing at the content-addressed blob.
@@ -103,7 +109,8 @@ export class MediaService {
    * @returns {Promise<FileRecord>}
    */
   async upload(stream, o) {
-    const maxBytes = Math.min(o.maxBytes ?? this.options.maxUploadBytes, this.options.maxUploadBytes);
+    const limit = this.limitFor(o.apiKeyId);
+    const maxBytes = Math.min(o.maxBytes ?? limit, limit);
     const allowed = o.allowedTypes ? o.allowedTypes.filter((t) => this.options.allowedTypes.includes(t)) : this.options.allowedTypes;
     let received;
     try {
@@ -179,9 +186,10 @@ export class MediaService {
    * @returns {{ token: string, uploadUrl: string, expiresAt: number, maxBytes: number, allowedTypes: string[] }}
    */
   createTicket(t) {
-    const maxBytes = t.maxBytes ?? this.options.maxUploadBytes;
-    if (maxBytes < 1 || maxBytes > this.options.maxUploadBytes) {
-      throw new MediaError('INVALID_ARGUMENT', `maxBytes must be 1..${this.options.maxUploadBytes}`);
+    const limit = this.limitFor(t.apiKeyId);
+    const maxBytes = t.maxBytes ?? limit;
+    if (maxBytes < 1 || maxBytes > limit) {
+      throw new MediaError('INVALID_ARGUMENT', `maxBytes must be 1..${limit}`);
     }
     const allowedTypes = t.allowedTypes ?? this.options.allowedTypes;
     const unknown = allowedTypes.filter((x) => !this.options.allowedTypes.includes(x));
