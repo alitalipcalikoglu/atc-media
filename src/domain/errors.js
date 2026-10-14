@@ -14,6 +14,8 @@ export class MediaError extends Error {
     UNSUPPORTED_TYPE: 415,
     INVALID_IMAGE: 422,
     VARIANT_BUSY: 503,
+    QUOTA_EXCEEDED: 507,
+    STORAGE_FULL: 507,
   };
 
   /**

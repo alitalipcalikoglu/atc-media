@@ -86,7 +86,7 @@ export async function testMediaService(envOverrides = {}, deps = {}) {
     signer: new UrlSigner(config.signingSecret, config.signingSecretPrevious),
     log: silentLog,
     options: {
-      publicBaseUrl: config.publicBaseUrl, maxUploadBytes: config.maxUploadBytes, allowedTypes: config.allowedTypes, variants: config.variants,
+      publicBaseUrl: config.publicBaseUrl, maxUploadBytes: config.maxUploadBytes, keyQuotaBytes: config.keyQuotaBytes, defaultQuotaBytes: config.defaultQuotaBytes, minFreeBytes: config.minFreeBytes, allowedTypes: config.allowedTypes, variants: config.variants,
       stripImageMetadata: config.stripImageMetadata, signedUrlTtlSec: config.signedUrlTtlSec, uploadTicketTtlSec: config.uploadTicketTtlSec,
       deleteGraceMs: config.deleteGraceDays * 86_400_000,
       maxConcurrentVariants: config.maxConcurrentVariants, variantWaitTimeoutMs: config.variantWaitTimeoutMs,

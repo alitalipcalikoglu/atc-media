@@ -127,6 +127,28 @@ paths:
                   schemaVersion: { type: integer, description: "SQLite `PRAGMA user_version` of the open database." }
                   serviceCore: { type: string, description: Installed `@atc-web/atc-service-core` version actually running. }
 
+  /v1/usage:
+    get:
+      operationId: atc-media.usage.get
+      summary: Storage used by the calling key, and its limits
+      tags: [Files]
+      x-stack-visibility: authenticated
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keyId, usedBytes, quotaBytes, maxUploadBytes]
+                properties:
+                  keyId: { type: string }
+                  usedBytes: { type: integer, description: Bytes of the key's live files (each file counts its full size, also when the bytes are shared). }
+                  quotaBytes: { type: [integer, "null"], description: "`KEY_QUOTA_BYTES` or `DEFAULT_QUOTA_BYTES`; null = unlimited." }
+                  maxUploadBytes: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /v1/files:
     put:
       operationId: atc-media.files.upload

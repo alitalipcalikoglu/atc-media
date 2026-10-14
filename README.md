@@ -137,6 +137,7 @@ still in the wild was generated.
 ## Security notes
 
 - API keys compared in constant time; per-key rate limit; unknown query fields rejected.
+- Storage quotas: `KEY_QUOTA_BYTES=id:bytes,…` and `DEFAULT_QUOTA_BYTES` cap the bytes of live files a key may own (`507 QUOTA_EXCEEDED`; deleting frees room once the file is deleted, not after the grace period of the bytes); `MIN_FREE_BYTES` refuses uploads (`507 STORAGE_FULL`) while the data volume is nearly full; `GET /v1/usage` shows a key its own usage. See [examples/quotas.md](examples/quotas.md).
 - Upload limits: `MAX_UPLOAD_BYTES` enforced while streaming (the connection is cut, nothing is kept), `MAX_IMAGE_PIXELS` before any decode. `KEY_MAX_UPLOAD_BYTES=id:bytes,…` gives one API key its own limit above or below the default (the stack gives the backup service 1 GiB so database copies fit); tickets and uploads of that key are checked against it.
 - Only sniffed, allow-listed types are stored. SVG is off by default (scriptable); if enabled it is served as an attachment inside a sandboxed CSP.
 - Re-encoding images removes metadata (location, device, author) and neutralises polyglot payloads.

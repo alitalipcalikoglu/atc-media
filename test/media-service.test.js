@@ -203,3 +203,38 @@ test('per-key upload limits: a key may have its own limit above or below MAX_UPL
     t.cleanup();
   }
 });
+
+test('storage quota: a key may own at most its quota; the upload that would cross it is refused, other keys are unaffected; deleting frees room', async () => {
+  const t = await testMediaService({ ALLOWED_TYPES: 'text/csv', KEY_QUOTA_BYTES: 'test:4096' });
+  try {
+    const csv = (/** @type {number} */ n) => Buffer.from(`a,b\n${'x'.repeat(n)}\n`);
+    const one = await t.service.upload(streamOf(csv(2_000)), { apiKeyId: 'test', name: 'one.csv' });
+    assert.deepEqual([t.service.usage('test').usedBytes, t.service.usage('test').quotaBytes], [one.size, 4096]);
+    await rejectsWith(t.service.upload(streamOf(csv(3_000)), { apiKeyId: 'test', name: 'two.csv' }), 'QUOTA_EXCEEDED');
+    await t.service.upload(streamOf(csv(1_000)), { apiKeyId: 'test', name: 'two.csv' });
+    await rejectsWith(t.service.upload(streamOf(csv(1_100)), { apiKeyId: 'test', name: 'three.csv' }), 'QUOTA_EXCEEDED');
+    assert.equal(t.service.usage('other').quotaBytes, null, 'a key without a quota is unlimited');
+    await t.service.upload(streamOf(csv(3_000)), { apiKeyId: 'other', name: 'other.csv' });
+    t.service.delete(one.id, 'test');
+    await t.service.upload(streamOf(csv(1_100)), { apiKeyId: 'test', name: 'three.csv' });
+  } finally {
+    t.cleanup();
+  }
+  const dflt = await testMediaService({ ALLOWED_TYPES: 'text/csv', DEFAULT_QUOTA_BYTES: '1024' });
+  try {
+    assert.equal(dflt.service.quotaFor('anyone'), 1024);
+    await rejectsWith(dflt.service.upload(streamOf(Buffer.from(`a,b\n${'x'.repeat(2_000)}\n`)), { apiKeyId: 'test', name: 'big.csv' }), 'QUOTA_EXCEEDED');
+  } finally {
+    dflt.cleanup();
+  }
+});
+
+test('free space guard: uploads are refused while the volume has less than MIN_FREE_BYTES', async () => {
+  const t = await testMediaService({ ALLOWED_TYPES: 'text/csv', MIN_FREE_BYTES: '1099511627776000' }); // an exabyte-scale threshold no disk meets
+  try {
+    await rejectsWith(t.service.upload(streamOf(Buffer.from('a,b\n1,2\n')), { apiKeyId: 'test', name: 'x.csv' }), 'STORAGE_FULL');
+    assert.equal(typeof (await t.storage.freeBytes()), 'number');
+  } finally {
+    t.cleanup();
+  }
+});

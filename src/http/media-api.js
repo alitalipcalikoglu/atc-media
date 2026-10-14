@@ -195,6 +195,8 @@ export class MediaApi {
       return reply.code(201).send({ file: this.#view(f) });
     });
 
+    api.get('/usage', async (request) => s.usage(request.apiKeyId));
+
     api.get('/files', { schema: { querystring: Schemas.listQuery } }, async (request) => {
       const q = /** @type {{ limit?: string, cursor?: string }} */ (request.query);
       const limit = q.limit ? Number(q.limit) : 20;
@@ -245,6 +247,7 @@ export class MediaApi {
         '# HELP media_files Live files.', '# TYPE media_files gauge', `media_files ${st.files}`,
         '# HELP media_blobs Stored unique objects.', '# TYPE media_blobs gauge', `media_blobs ${st.blobs}`,
         '# HELP media_stored_bytes Bytes of stored originals.', '# TYPE media_stored_bytes gauge', `media_stored_bytes ${st.bytes}`,
+        '# HELP media_storage_free_bytes Free bytes on the data volume (only with MIN_FREE_BYTES set).', '# TYPE media_storage_free_bytes gauge', ...(this.config.minFreeBytes ? [`media_storage_free_bytes ${await this.service.storage.freeBytes() ?? 0}`] : []),
         '# HELP media_uploads_total Successful uploads since start.', '# TYPE media_uploads_total counter', `media_uploads_total ${this.counters.uploads}`,
         '# HELP media_downloads_total Delivery requests since start.', '# TYPE media_downloads_total counter', `media_downloads_total ${this.counters.downloads}`,
         '# HELP media_downloaded_bytes_total Bytes requested since start.', '# TYPE media_downloaded_bytes_total counter', `media_downloaded_bytes_total ${this.counters.bytesOut}`,

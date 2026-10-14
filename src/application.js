@@ -57,7 +57,7 @@ export class Application {
       signer: new UrlSigner(config.signingSecret, config.signingSecretPrevious),
       log: /** @type {any} */ (console),
       options: {
-        publicBaseUrl: config.publicBaseUrl, maxUploadBytes: config.maxUploadBytes, keyMaxUploadBytes: config.keyMaxUploadBytes, allowedTypes: config.allowedTypes, variants: config.variants,
+        publicBaseUrl: config.publicBaseUrl, maxUploadBytes: config.maxUploadBytes, keyMaxUploadBytes: config.keyMaxUploadBytes, keyQuotaBytes: config.keyQuotaBytes, defaultQuotaBytes: config.defaultQuotaBytes, minFreeBytes: config.minFreeBytes, allowedTypes: config.allowedTypes, variants: config.variants,
         stripImageMetadata: config.stripImageMetadata, signedUrlTtlSec: config.signedUrlTtlSec, uploadTicketTtlSec: config.uploadTicketTtlSec,
         deleteGraceMs: config.deleteGraceDays * 86_400_000,
         maxConcurrentVariants: config.maxConcurrentVariants, variantWaitTimeoutMs: config.variantWaitTimeoutMs,

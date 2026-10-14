@@ -108,6 +108,11 @@ export class Storage {
     throw new Error('Storage.writeAtomic must be overridden');
   }
 
+  /** Free bytes on the volume that holds the data, or null when the backend cannot tell. @returns {Promise<number|null>} */
+  async freeBytes() {
+    return null;
+  }
+
   /**
    * @param {StorageKey} key
    * @returns {Promise<boolean>}

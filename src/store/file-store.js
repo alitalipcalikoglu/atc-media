@@ -157,6 +157,11 @@ export class FileStore {
     return confirmed;
   }
 
+  /** Bytes of the live files a key owns (each file counts its full size, also when the bytes are shared). @param {string} apiKeyId */
+  usedBytes(apiKeyId) {
+    return Number(/** @type {{ n: number }} */ (this.db.prepare('SELECT COALESCE(SUM(b.size), 0) AS n FROM files f JOIN blobs b ON b.sha256 = f.blob_sha256 WHERE f.api_key_id = ? AND f.deleted_at IS NULL').get(apiKeyId)).n);
+  }
+
   /** @returns {{ files: number, blobs: number, bytes: number }} */
   stats() {
     return /** @type {{ files: number, blobs: number, bytes: number }} */ (this.stmt.stats.get());

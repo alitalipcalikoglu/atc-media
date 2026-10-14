@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { link, lstat, mkdir, readdir, rename, rm, stat, unlink } from 'node:fs/promises';
+import { link, lstat, mkdir, readdir, rename, rm, stat, statfs, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
@@ -151,6 +151,12 @@ export class LocalStorage extends Storage {
     await mkdir(dirname(dest), { recursive: true });
     await pipeline([data], createWriteStream(tmp, { flags: 'wx', mode: 0o600 }));
     await rename(tmp, dest);
+  }
+
+  /** @returns {Promise<number|null>} */
+  async freeBytes() {
+    const s = await statfs(this.dataDir);
+    return Number(s.bavail) * Number(s.bsize);
   }
 
   /** @param {StorageKey} key */

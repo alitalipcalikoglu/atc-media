@@ -35,6 +35,9 @@
  * @property {number} variantWaitTimeoutMs    Bound on how long a new (non-deduped) generation waits for a free slot.
  * @property {number} maxUploadBytes
  * @property {Record<string, number>} keyMaxUploadBytes  Per-key override of maxUploadBytes (key id to bytes).
+ * @property {Record<string, number>} keyQuotaBytes      Per-key storage quota: bytes of live files the key may own.
+ * @property {number} defaultQuotaBytes   Quota of keys without their own; 0 = unlimited.
+ * @property {number} minFreeBytes        Uploads are refused while the data volume has less free space; 0 = no check.
  * @property {number} maxImagePixels
  * @property {string[]} allowedTypes
  * @property {VariantSpec[]} variants

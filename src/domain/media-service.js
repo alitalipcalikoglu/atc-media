@@ -31,6 +31,9 @@ import { Semaphore, SemaphoreQueueFullError, SemaphoreTimeoutError } from './sem
  * @property {string} publicBaseUrl
  * @property {number} maxUploadBytes
  * @property {Record<string, number>} [keyMaxUploadBytes]
+ * @property {Record<string, number>} [keyQuotaBytes]
+ * @property {number} [defaultQuotaBytes]
+ * @property {number} [minFreeBytes]
  * @property {string[]} allowedTypes
  * @property {VariantSpec[]} variants
  * @property {boolean} stripImageMetadata
@@ -101,6 +104,17 @@ export class MediaService {
     return (apiKeyId && this.options.keyMaxUploadBytes?.[apiKeyId]) || this.options.maxUploadBytes;
   }
 
+  /** The storage quota of one API key in bytes (its own, else the default), or null for unlimited. @param {string} [apiKeyId] */
+  quotaFor(apiKeyId) {
+    const q = (apiKeyId && this.options.keyQuotaBytes?.[apiKeyId]) || this.options.defaultQuotaBytes || 0;
+    return q > 0 ? q : null;
+  }
+
+  /** What a key owns and may own. @param {string} apiKeyId */
+  usage(apiKeyId) {
+    return { keyId: apiKeyId, usedBytes: this.files.usedBytes(apiKeyId), quotaBytes: this.quotaFor(apiKeyId), maxUploadBytes: this.limitFor(apiKeyId) };
+  }
+
   /**
    * Store an uploaded stream. Sniffs the real type, rejects anything not allowed, validates and
    * (by default) re-encodes images, then records a file pointing at the content-addressed blob.
@@ -110,13 +124,24 @@ export class MediaService {
    */
   async upload(stream, o) {
     const limit = this.limitFor(o.apiKeyId);
-    const maxBytes = Math.min(o.maxBytes ?? limit, limit);
+    const quota = this.quotaFor(o.apiKeyId);
+    const used = quota !== null && o.apiKeyId ? this.files.usedBytes(o.apiKeyId) : 0;
+    if (quota !== null && used >= quota) throw new MediaError('QUOTA_EXCEEDED', `storage quota of ${quota} bytes is used up`, { quotaBytes: quota, usedBytes: used });
+    if (this.options.minFreeBytes) {
+      const free = await this.storage.freeBytes();
+      if (free !== null && free < this.options.minFreeBytes) throw new MediaError('STORAGE_FULL', 'the storage volume is nearly full; uploads are refused', { freeBytes: free });
+    }
+    // The upload may not push the key over its quota: the limit for this stream is the smaller of its normal limit and what is left.
+    const maxBytes = Math.min(o.maxBytes ?? limit, limit, quota === null ? Infinity : quota - used);
     const allowed = o.allowedTypes ? o.allowedTypes.filter((t) => this.options.allowedTypes.includes(t)) : this.options.allowedTypes;
     let received;
     try {
       received = await this.storage.writeTemp(stream, { maxBytes });
     } catch (err) {
-      if (err instanceof UploadError) throw new MediaError(err.code, err.message, { maxBytes });
+      if (err instanceof UploadError) {
+        if (quota !== null && maxBytes < Math.min(o.maxBytes ?? limit, limit)) throw new MediaError('QUOTA_EXCEEDED', `this upload would exceed the storage quota of ${quota} bytes`, { quotaBytes: quota, usedBytes: used });
+        throw new MediaError(err.code, err.message, { maxBytes });
+      }
       throw err;
     }
     let { key: tempKey, sha256, size } = received;
