@@ -20,8 +20,9 @@ export class Schemas {
   };
   static listQuery = {
     type: 'object', additionalProperties: false,
-    properties: { limit: { type: 'string', pattern: '^([1-9]|[1-9][0-9]|100)$' }, cursor: { type: 'string', maxLength: 128 } },
+    properties: { limit: { type: 'string', pattern: '^([1-9]|[1-9][0-9]|100)$' }, cursor: { type: 'string', maxLength: 128 }, owner: { type: 'string', pattern: '^[A-Za-z0-9_.-]{1,64}$' } },
   };
+  static quarantineParams = { type: 'object', properties: { id: { type: 'string', pattern: '^q_[0-9a-z]{6,12}[0-9a-f]{12}$' } }, required: ['id'] };
   static signQuery = { type: 'object', additionalProperties: false, properties: { ttl: { type: 'string', pattern: '^\\d{1,7}$' } } };
 
   static ticketBody = {

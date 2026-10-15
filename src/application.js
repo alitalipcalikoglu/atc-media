@@ -11,6 +11,7 @@ import { LocalStorage } from './storage/local-storage.js';
 import { FileStore } from './store/file-store.js';
 import { TicketStore } from './store/ticket-store.js';
 import { UrlSigner } from './url-signer.js';
+import { VirusScanner } from './storage/virus-scanner.js';
 
 /** Composition root: wires everything and owns the process lifecycle. */
 export class Application {
@@ -56,7 +57,9 @@ export class Application {
       images: new ImageProcessor({ maxPixels: config.maxImagePixels, quality: config.variantQuality }),
       signer: new UrlSigner(config.signingSecret, config.signingSecretPrevious),
       log: /** @type {any} */ (console),
+      scanner: config.clamd ? new VirusScanner(config.clamd) : null,
       options: {
+        scanFailOpen: config.scanFailOpen, quarantineDays: config.quarantineDays,
         publicBaseUrl: config.publicBaseUrl, maxUploadBytes: config.maxUploadBytes, keyMaxUploadBytes: config.keyMaxUploadBytes, keyQuotaBytes: config.keyQuotaBytes, defaultQuotaBytes: config.defaultQuotaBytes, minFreeBytes: config.minFreeBytes, allowedTypes: config.allowedTypes, variants: config.variants,
         stripImageMetadata: config.stripImageMetadata, signedUrlTtlSec: config.signedUrlTtlSec, uploadTicketTtlSec: config.uploadTicketTtlSec,
         deleteGraceMs: config.deleteGraceDays * 86_400_000,

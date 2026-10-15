@@ -51,5 +51,19 @@ export class Database extends CoreDatabase {
     ALTER TABLE blobs ADD COLUMN delete_token TEXT;
     CREATE INDEX blobs_delete_token ON blobs (delete_token) WHERE delete_token IS NOT NULL;
     `,
+    `
+    -- Uploads a virus scan found infected: kept apart (DATA_DIR/quarantine/<id>), never served.
+    CREATE TABLE quarantine (
+      id          TEXT PRIMARY KEY,
+      api_key_id  TEXT NOT NULL,
+      name        TEXT NOT NULL,
+      mime        TEXT,
+      size        INTEGER NOT NULL,
+      sha256      TEXT NOT NULL,
+      signature   TEXT NOT NULL,
+      created_at  INTEGER NOT NULL
+    );
+    CREATE INDEX quarantine_created ON quarantine (created_at DESC);
+    `,
   ];
 }

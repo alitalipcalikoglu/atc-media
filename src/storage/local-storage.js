@@ -50,7 +50,7 @@ export class LocalStorage extends Storage {
    * once at process start, never from a readiness probe: it deletes in-flight upload files.
    */
   async prepare() {
-    await Promise.all(['tmp', 'objects', 'variants', 'trash'].map((d) => mkdir(join(this.dataDir, d), { recursive: true })));
+    await Promise.all(['tmp', 'objects', 'variants', 'trash', 'quarantine'].map((d) => mkdir(join(this.dataDir, d), { recursive: true })));
     await rm(join(this.dataDir, 'tmp'), { recursive: true, force: true });
     await mkdir(join(this.dataDir, 'tmp'), { recursive: true });
     return this;
@@ -197,6 +197,23 @@ export class LocalStorage extends Storage {
   /** @param {TempKey} key */
   async discard(key) {
     await unlink(this.#path(key)).catch(() => {});
+  }
+
+  /** @param {TempKey} key @param {string} id */
+  async quarantine(key, id) {
+    await mkdir(join(this.dataDir, 'quarantine'), { recursive: true });
+    await rename(this.#path(key), this.#quarantinePath(id));
+  }
+
+  /** @param {string} id */
+  async removeQuarantined(id) {
+    await unlink(this.#quarantinePath(id)).catch(() => {});
+  }
+
+  /** @param {string} id */
+  #quarantinePath(id) {
+    if (!/^q_[0-9a-z]{6,12}[0-9a-f]{12}$/.test(id)) throw new Error('invalid quarantine id');
+    return join(this.dataDir, 'quarantine', id);
   }
 
   /**

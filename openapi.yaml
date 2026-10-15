@@ -29,6 +29,8 @@ tags:
     description: Upload, list, read, patch, delete/restore and sign URLs for stored files. API-key authenticated.
   - name: Uploads
     description: Single-use upload tickets that let a browser upload directly, without an API key.
+  - name: Quarantine
+    description: Uploads the virus scan rejected, kept for review for `QUARANTINE_DAYS`. Admin keys only.
   - name: Delivery
     description: Public or signature-gated byte delivery, with conditional and range-request support.
   - name: Operations
@@ -222,6 +224,8 @@ paths:
           $ref: '#/components/responses/UnsupportedType'
         '422':
           $ref: '#/components/responses/InvalidImage'
+        '503':
+          $ref: '#/components/responses/ScanUnavailable'
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -230,6 +234,9 @@ paths:
       tags: [Files]
       summary: List files owned by the calling API key
       description: |
+        Admin keys (`ADMIN_KEYS`) list every key's files, optionally narrowed with `owner`; other
+        keys always see only their own and `owner` is ignored.
+
         Keyset pagination, newest first. `nextCursor` is an opaque, base64url-encoded
         `<createdAt>:<id>` token; pass it back as `cursor` to fetch the next page. `null` means no
         further pages.
@@ -247,6 +254,11 @@ paths:
           required: false
           description: Opaque `nextCursor` value from a previous page.
           schema: { type: string, maxLength: 128 }
+        - name: owner
+          in: query
+          required: false
+          description: Admin keys only — list this key id's files.
+          schema: { type: string, pattern: '^[A-Za-z0-9_.-]{1,64}$' }
       responses:
         '200':
           description: A page of files owned by the calling key.
@@ -480,6 +492,68 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
 
+  /v1/quarantine:
+    get:
+      operationId: atc-media.quarantine.list
+      tags: [Quarantine]
+      summary: List quarantined uploads
+      description: Newest first, at most 200. The bytes stay on disk until deleted here or purged after `QUARANTINE_DAYS`; they are never served.
+      security:
+        - ApiKeyAuth: []
+      x-stack-visibility: authenticated
+      responses:
+        '200':
+          description: Quarantined uploads.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/QuarantineItem' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /v1/quarantine/{id}:
+    delete:
+      operationId: atc-media.quarantine.delete
+      tags: [Quarantine]
+      summary: Delete a quarantined upload
+      description: Removes the record and its bytes.
+      security:
+        - ApiKeyAuth: []
+      x-stack-visibility: authenticated
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, pattern: '^q_[0-9a-z]{6,12}[0-9a-f]{12}$' }
+      responses:
+        '204':
+          description: Deleted.
+        '400':
+          description: "`VALIDATION_FAILED` — malformed id."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: "`NOT_FOUND` — no such quarantined upload."
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
   /v1/uploads/{token}:
     put:
       operationId: atc-media.files.uploadTicketed
@@ -555,6 +629,8 @@ paths:
           $ref: '#/components/responses/UnsupportedType'
         '422':
           $ref: '#/components/responses/InvalidImage'
+        '503':
+          $ref: '#/components/responses/ScanUnavailable'
 
   /files/{id}/{variant}:
     get:
@@ -782,7 +858,21 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     InvalidImage:
-      description: "`INVALID_IMAGE` — the sniffed type is a raster image format, but the bytes fail to decode, have no dimensions, or exceed `MAX_IMAGE_PIXELS` (decompression-bomb guard)."
+      description: |
+        `INVALID_IMAGE` — the sniffed type is a raster image format, but the bytes fail to decode,
+        have no dimensions, or exceed `MAX_IMAGE_PIXELS` (decompression-bomb guard). Or, with
+        `CLAMD_HOST` set, `INFECTED` — the virus scan found malware; the upload was moved to the
+        quarantine and `details` carries `{quarantineId, signature}`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ScanUnavailable:
+      description: "`SCAN_UNAVAILABLE` — `CLAMD_HOST` is set and clamd could not be asked; nothing was stored. Never returned with `SCAN_FAIL_OPEN=true`."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: "`FORBIDDEN` — this API key is not in `ADMIN_KEYS`."
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -861,7 +951,7 @@ components:
 
     FileView:
       type: object
-      required: [id, name, mime, size, width, height, sha256, visibility, createdAt, urls]
+      required: [id, name, mime, size, width, height, sha256, visibility, owner, createdAt, urls]
       properties:
         id: { $ref: '#/components/schemas/FileId' }
         name: { type: string, description: Sanitised display name; extension always matches the sniffed type. }
@@ -875,8 +965,22 @@ components:
           description: Pixel height. `null` for a non-raster file; always set for a raster image.
         sha256: { type: string, pattern: '^[0-9a-f]{64}$', description: "Content hash of the `original`'s bytes (after metadata-stripping normalisation, when applied). Drives content-addressed dedup." }
         visibility: { $ref: '#/components/schemas/Visibility' }
+        owner: { type: string, description: Id of the API key that owns the file. }
         createdAt: { type: string, format: date-time }
         urls: { $ref: '#/components/schemas/UrlsMap' }
+
+    QuarantineItem:
+      type: object
+      required: [id, owner, name, mime, size, sha256, signature, createdAt]
+      properties:
+        id: { type: string, pattern: '^q_[0-9a-z]{6,12}[0-9a-f]{12}$' }
+        owner: { type: string, description: Key id that uploaded it. }
+        name: { type: string }
+        mime: { type: [string, 'null'] }
+        size: { type: integer, minimum: 0 }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        signature: { type: string, description: Malware signature clamd reported. }
+        createdAt: { type: string, format: date-time }
 
     FileList:
       type: object

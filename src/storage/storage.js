@@ -179,6 +179,16 @@ export class Storage {
     throw new Error('Storage.discard must be overridden');
   }
 
+  /** Move a temp entry into quarantine under `id` (an infected upload kept for review). @param {TempKey} key @param {string} id @returns {Promise<void>} */
+  async quarantine(key, id) {
+    throw new Error('Storage.quarantine must be overridden');
+  }
+
+  /** Delete a quarantined entry. @param {string} id @returns {Promise<void>} */
+  async removeQuarantined(id) {
+    throw new Error('Storage.removeQuarantined must be overridden');
+  }
+
   /**
    * Stage 8.2 physical-delete fencing: atomically detach the canonical bytes at `key` — and every
    * variant derived from it — into quarantine scoped to `token`, in one step. The instant this

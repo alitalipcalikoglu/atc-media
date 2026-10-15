@@ -20,6 +20,7 @@ One event per completed write request, `outcome: "success"` for 2xx, `outcome: "
 | `atc-media.file.delete` | `DELETE /v1/files/:id` |
 | `atc-media.file.restore` | `POST /v1/files/:id/restore` |
 | `atc-media.upload.ticket` | `POST /v1/uploads` |
+| `atc-media.quarantine.delete` | `DELETE /v1/quarantine/:id` |
 
 For `atc-media.upload.ticket` the target is `{ type: "ticket", id: <sha256 hex of the token> }`, the same hash the ticket is stored under. The plaintext token is never forwarded.
 

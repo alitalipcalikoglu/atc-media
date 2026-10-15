@@ -65,7 +65,7 @@ export const silentLog = /** @type {any} */ (new Proxy({}, {
 /**
  * Fully wired MediaService on a temp directory and in-memory database.
  * @param {Record<string, string>} [envOverrides]
- * @param {{ images?: any }} [deps] `images`: an `ImageProcessor`-shaped stand-in for controlling variant-generation timing/outcome in tests.
+ * @param {{ images?: any, scanner?: any }} [deps] `images`: an `ImageProcessor`-shaped stand-in for controlling variant-generation timing/outcome in tests.
  */
 export async function testMediaService(envOverrides = {}, deps = {}) {
   const { FileStore } = await import('../src/store/file-store.js');
@@ -85,7 +85,9 @@ export async function testMediaService(envOverrides = {}, deps = {}) {
     images: deps.images ?? new ImageProcessor({ maxPixels: config.maxImagePixels, quality: config.variantQuality }),
     signer: new UrlSigner(config.signingSecret, config.signingSecretPrevious),
     log: silentLog,
+    scanner: deps.scanner ?? null,
     options: {
+      scanFailOpen: config.scanFailOpen, quarantineDays: config.quarantineDays,
       publicBaseUrl: config.publicBaseUrl, maxUploadBytes: config.maxUploadBytes, keyQuotaBytes: config.keyQuotaBytes, defaultQuotaBytes: config.defaultQuotaBytes, minFreeBytes: config.minFreeBytes, allowedTypes: config.allowedTypes, variants: config.variants,
       stripImageMetadata: config.stripImageMetadata, signedUrlTtlSec: config.signedUrlTtlSec, uploadTicketTtlSec: config.uploadTicketTtlSec,
       deleteGraceMs: config.deleteGraceDays * 86_400_000,

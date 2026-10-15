@@ -1,4 +1,4 @@
-/** @typedef {{ files: number, blobs: number, tickets: number, trashReconciled: number, trashSkipped: number, trashErrors: number }} PurgeResult */
+/** @typedef {{ files: number, blobs: number, tickets: number, trashReconciled: number, trashSkipped: number, trashErrors: number, quarantine: number }} PurgeResult */
 /** @typedef {PurgeResult & { errors: number }} MaintenanceResult errors: 1 when purge() itself threw (never happens today — purge() contains its own failures — kept so a caller never has to guess whether a result reflects a real run). */
 
 /** Periodic purge of soft-deleted files past the grace period, orphaned blobs and expired tickets. */
@@ -54,14 +54,14 @@ export class Maintenance {
       try {
         const r = await this.service.purge();
         const durationMs = Date.now() - startedAt;
-        if (trigger === 'manual' || r.files || r.blobs || r.tickets || r.trashReconciled || r.trashErrors) {
+        if (trigger === 'manual' || r.files || r.blobs || r.tickets || r.trashReconciled || r.trashErrors || r.quarantine) {
           this.log.info({ trigger, durationMs, ...r }, 'maintenance run');
         }
         return { ...r, errors: 0 };
       } catch (err) {
         const durationMs = Date.now() - startedAt;
         this.log.error({ trigger, durationMs, err }, 'maintenance failed');
-        return { files: 0, blobs: 0, tickets: 0, trashReconciled: 0, trashSkipped: 0, trashErrors: 0, errors: 1 };
+        return { files: 0, blobs: 0, tickets: 0, trashReconciled: 0, trashSkipped: 0, trashErrors: 0, quarantine: 0, errors: 1 };
       }
     })().finally(() => { this.running = null; });
     return this.running;

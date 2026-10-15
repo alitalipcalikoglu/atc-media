@@ -24,6 +24,13 @@ export class FileStore {
       blobGet: db.prepare(`SELECT sha256, size, mime, width, height, created_at, delete_token FROM blobs WHERE sha256 = ?`),
       fileInsert: db.prepare(`INSERT INTO files (id, api_key_id, blob_sha256, name, visibility, created_at) VALUES (?, ?, ?, ?, ?, ?)`),
       fileById: db.prepare(`${FileStore.SELECT} WHERE f.id = ?`),
+      fileListAll: db.prepare(`${FileStore.SELECT} WHERE f.deleted_at IS NULL AND (f.created_at < ? OR (f.created_at = ? AND f.id < ?)) ORDER BY f.created_at DESC, f.id DESC LIMIT ?`),
+      quarantineInsert: db.prepare('INSERT INTO quarantine (id, api_key_id, name, mime, size, sha256, signature, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
+      quarantineList: db.prepare('SELECT * FROM quarantine ORDER BY created_at DESC, id DESC LIMIT ?'),
+      quarantineGet: db.prepare('SELECT * FROM quarantine WHERE id = ?'),
+      quarantineDelete: db.prepare('DELETE FROM quarantine WHERE id = ?'),
+      quarantineCount: db.prepare('SELECT COUNT(*) AS n FROM quarantine'),
+      quarantineOld: db.prepare('SELECT id FROM quarantine WHERE created_at < ?'),
       fileList: db.prepare(`${FileStore.SELECT} WHERE f.api_key_id = ? AND f.deleted_at IS NULL AND (f.created_at < ? OR (f.created_at = ? AND f.id < ?)) ORDER BY f.created_at DESC, f.id DESC LIMIT ?`),
       fileSoftDelete: db.prepare(`UPDATE files SET deleted_at = ? WHERE id = ? AND api_key_id = ? AND deleted_at IS NULL`),
       fileRestore: db.prepare(`UPDATE files SET deleted_at = NULL WHERE id = ? AND api_key_id = ? AND deleted_at IS NOT NULL`),
@@ -76,12 +83,25 @@ export class FileStore {
   }
 
   /**
-   * Live files for an owner, newest first.
-   * @param {{ apiKeyId: string, limit: number, before?: { createdAt: number, id: string } }} q
+   * Live files, newest first: one owner's, or every owner's when `apiKeyId` is null.
+   * @param {{ apiKeyId: string|null, limit: number, before?: { createdAt: number, id: string } }} q
    */
   list({ apiKeyId, limit, before = { createdAt: Number.MAX_SAFE_INTEGER, id: '￿' } }) {
+    if (apiKeyId === null) return /** @type {FileRecord[]} */ (this.stmt.fileListAll.all(before.createdAt, before.createdAt, before.id, limit));
     return /** @type {FileRecord[]} */ (this.stmt.fileList.all(apiKeyId, before.createdAt, before.createdAt, before.id, limit));
   }
+
+  /** @param {{ id: string, apiKeyId: string, name: string, mime: string|null, size: number, sha256: string, signature: string }} q @param {number} now */
+  quarantineAdd(q, now) { this.stmt.quarantineInsert.run(q.id, q.apiKeyId, q.name, q.mime, q.size, q.sha256, q.signature, now); }
+  /** @param {number} limit @returns {Record<string, any>[]} */
+  quarantined(limit) { return /** @type {any} */ (this.stmt.quarantineList.all(limit)); }
+  /** @param {string} id @returns {Record<string, any>|undefined} */
+  quarantinedOne(id) { return /** @type {any} */ (this.stmt.quarantineGet.get(id)); }
+  /** @param {string} id */
+  quarantineRemove(id) { return Number(this.stmt.quarantineDelete.run(id).changes) === 1; }
+  quarantineCount() { return Number(/** @type {{ n: number }} */ (this.stmt.quarantineCount.get()).n); }
+  /** @param {number} cutoff @returns {string[]} */
+  quarantineOlderThan(cutoff) { return /** @type {{ id: string }[]} */ (this.stmt.quarantineOld.all(cutoff)).map((r) => r.id); }
 
   /**
    * @param {string} id

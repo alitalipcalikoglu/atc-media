@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { buffer as streamToBuffer } from 'node:stream/consumers';
 import { UploadError } from '../storage/storage.js';
 import { TypeSniffer } from '../storage/type-sniffer.js';
@@ -44,6 +44,8 @@ import { Semaphore, SemaphoreQueueFullError, SemaphoreTimeoutError } from './sem
  * @property {number} variantWaitTimeoutMs    Bound on how long a NEW (non-deduped) generation waits for a free slot.
  * @property {number} trashGraceMs    Passed straight through to `Storage#reconcileTrash`.
  * @property {number} trashMaxEntries Passed straight through to `Storage#reconcileTrash`.
+ * @property {boolean} [scanFailOpen]   Accept uploads when the virus scanner cannot be reached (default: refuse).
+ * @property {number} [quarantineDays]  Infected uploads are kept this long.
  */
 
 /**
@@ -74,8 +76,10 @@ export class MediaService {
    * @param {Logger} deps.log
    * @param {MediaServiceOptions} deps.options
    * @param {() => number} [deps.now]
+   * @param {import('../storage/virus-scanner.js').VirusScanner|null} [deps.scanner]  Scans every upload when set (clamd).
    */
-  constructor({ files, tickets, storage, images, signer, log, options, now = Date.now }) {
+  constructor({ files, tickets, storage, images, signer, log, options, now = Date.now, scanner = null }) {
+    this.scanner = scanner;
     this.files = files;
     this.tickets = tickets;
     this.storage = storage;
@@ -149,6 +153,25 @@ export class MediaService {
       const mime = TypeSniffer.sniff(received.head) ?? TypeSniffer.textType(received.head, o.name);
       if (!mime || !allowed.includes(mime)) {
         throw new MediaError('UNSUPPORTED_TYPE', mime ? `type ${mime} is not allowed` : 'file type not recognised', { allowed });
+      }
+      if (this.scanner) {
+        /** @type {{ clean: boolean, signature?: string }|null} */ let verdict = null;
+        try {
+          const path = await this.storage.localPath(/** @type {any} */ (tempKey));
+          if (!path) throw new Error('this storage driver has no local file to scan');
+          verdict = await this.scanner.scan(path);
+        } catch (err) {
+          this.log.error({ err: err instanceof Error ? err.message : String(err) }, 'virus scan unavailable');
+          if (!this.options.scanFailOpen) throw new MediaError('SCAN_UNAVAILABLE', 'the virus scanner cannot be reached; try again later');
+        }
+        if (verdict && !verdict.clean) {
+          const id = `q_${this.now().toString(36)}${randomBytes(6).toString('hex')}`;
+          const name = FileName.sanitize(o.name, mime);
+          await this.storage.quarantine(/** @type {any} */ (tempKey), id);
+          this.files.quarantineAdd({ id, apiKeyId: o.apiKeyId, name, mime, size, sha256, signature: /** @type {string} */ (verdict.signature) }, this.now());
+          this.log.warn({ quarantineId: id, signature: verdict.signature, apiKeyId: o.apiKeyId, sha256 }, 'infected upload quarantined');
+          throw new MediaError('INFECTED', `the file contains malware (${verdict.signature}); it was quarantined`, { quarantineId: id, signature: verdict.signature });
+        }
       }
       /** @type {number|null} */ let width = null;
       /** @type {number|null} */ let height = null;
@@ -267,7 +290,7 @@ export class MediaService {
   }
 
   /**
-   * @param {string} apiKeyId
+   * @param {string|null} apiKeyId  null = every key's files (admin keys).
    * @param {{ limit: number, before?: { createdAt: number, id: string } }} q
    */
   list(apiKeyId, q) {
@@ -276,38 +299,38 @@ export class MediaService {
 
   /**
    * @param {string} id
-   * @param {string} apiKeyId
+   * @param {string|undefined} apiKeyId  undefined = any owner (admin keys).
    * @param {{ visibility?: Visibility, name?: string }} patch
    * @returns {FileRecord}
    */
   update(id, apiKeyId, patch) {
     const f = this.get(id, apiKeyId);
     const clean = { ...patch, ...(patch.name !== undefined ? { name: FileName.sanitize(patch.name, f.mime) } : {}) };
-    this.files.update(id, apiKeyId, clean);
+    this.files.update(id, f.api_key_id, clean);
     return this.get(id, apiKeyId);
   }
 
   /**
    * Soft delete; bytes are removed by {@link purge} after the grace period.
    * @param {string} id
-   * @param {string} apiKeyId
+   * @param {string|undefined} apiKeyId  undefined = any owner (admin keys).
    */
   delete(id, apiKeyId) {
-    this.get(id, apiKeyId);
-    this.files.softDelete(id, apiKeyId, this.now());
+    const f = this.get(id, apiKeyId);
+    this.files.softDelete(id, f.api_key_id, this.now());
     this.log.info({ fileId: id, apiKeyId }, 'file soft-deleted');
   }
 
   /**
    * Undo a soft delete within the grace period.
    * @param {string} id
-   * @param {string} apiKeyId
+   * @param {string|undefined} apiKeyId  undefined = any owner (admin keys).
    * @returns {FileRecord}
    */
   restore(id, apiKeyId) {
     const f = this.files.byId(id);
-    if (!f || f.api_key_id !== apiKeyId) throw new MediaError('NOT_FOUND', 'file not found');
-    this.files.restore(id, apiKeyId);
+    if (!f || (apiKeyId !== undefined && f.api_key_id !== apiKeyId)) throw new MediaError('NOT_FOUND', 'file not found');
+    this.files.restore(id, f.api_key_id);
     return this.get(id, apiKeyId);
   }
 
@@ -471,7 +494,7 @@ export class MediaService {
    *    (the accepted disk leak the Stage 8.2 crash-window tests document). Runs every pass —
    *    startup, timer and manual alike — same as every step above; never touches the canonical
    *    namespaces, only quarantine's own.
-   * @returns {Promise<{ files: number, blobs: number, tickets: number, trashReconciled: number, trashSkipped: number, trashErrors: number }>}
+   * @returns {Promise<{ files: number, blobs: number, tickets: number, trashReconciled: number, trashSkipped: number, trashErrors: number, quarantine: number }>}
    */
   async purge() {
     const now = this.now();
@@ -496,6 +519,23 @@ export class MediaService {
     });
     if (trashErrors) this.log.error({ trashErrors }, 'trash reconciliation had failures; see storage-level logs/manual inspection');
     const tickets = this.tickets.purge(now);
-    return { files, blobs: confirmed.length, tickets, trashReconciled, trashSkipped, trashErrors };
+    let quarantine = 0;
+    for (const id of this.files.quarantineOlderThan(now - (this.options.quarantineDays ?? 30) * 86_400_000)) {
+      await this.storage.removeQuarantined(id);
+      if (this.files.quarantineRemove(id)) quarantine++;
+    }
+    return { files, blobs: confirmed.length, tickets, trashReconciled, trashSkipped, trashErrors, quarantine };
+  }
+
+  /** Infected uploads kept for review, newest first. */
+  listQuarantine(limit = 200) {
+    return this.files.quarantined(limit);
+  }
+
+  /** Delete one quarantined upload (record and bytes). @param {string} id */
+  async deleteQuarantined(id) {
+    if (!this.files.quarantinedOne(id)) throw new MediaError('NOT_FOUND', 'no such quarantined upload');
+    await this.storage.removeQuarantined(id);
+    this.files.quarantineRemove(id);
   }
 }

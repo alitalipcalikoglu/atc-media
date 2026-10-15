@@ -44,6 +44,8 @@ npm run typecheck
 - **Images are re-encoded on upload** (`STRIP_IMAGE_METADATA=true`): EXIF, GPS and XMP are dropped, orientation is applied, the file becomes a clean encoder product. Decoding is capped at `MAX_IMAGE_PIXELS`.
 - **Storage is content-addressed.** Identical bytes are stored once; files are named references to a blob. Deleting a file is soft; bytes disappear after `DELETE_GRACE_DAYS`, when no file references the blob any more.
 - **Variants** are presets from `VARIANTS` (`thumb:200x200:cover`, `medium:800`, …), generated on first request, cached on disk, served as WebP, never enlarged.
+- **Virus scan (optional).** With `CLAMD_HOST` set, every upload (API and ticket) is streamed to a ClamAV daemon before it is stored. Malware is refused with `422 INFECTED` and the bytes move to the quarantine (`DATA_DIR/quarantine/`), never served, listed for admin keys and purged after `QUARANTINE_DAYS`. When clamd cannot be asked the upload is refused with `503 SCAN_UNAVAILABLE`, unless `SCAN_FAIL_OPEN=true`. `/ready` pings clamd.
+- **Admin keys.** Key ids in `ADMIN_KEYS` see every key's files (`GET /v1/files?owner=` narrows), may rename, delete and restore them, and manage the quarantine. Other keys only ever see their own files; every file view carries its `owner`.
 - **Visibility.** `public` files have stable URLs with immutable caching. `private` files need `exp` and `sig` query parameters; signatures are bound to file id, variant and expiry.
 
 ## Boundaries
@@ -62,7 +64,7 @@ Errors are JSON: `{ "error": { "code", "message", "details?" } }`.
 |---|---|---|---|
 | GET | `/health`, `/ready`, `/v1/info` | none | Liveness; readiness (database and data directory writable, cached 30 s); service identity (version, API version, capabilities, schema version, service-core version). |
 | PUT | `/v1/files?visibility=&name=` | API key | Upload raw body. `201` with `file`. Headers: `Content-Type`, `X-File-Name`. |
-| GET | `/v1/files?limit=&cursor=` | API key | Own files, newest first. |
+| GET | `/v1/files?limit=&cursor=&owner=` | API key | Own files, newest first; admin keys see every key's files, `owner` narrows. |
 | GET / PATCH / DELETE | `/v1/files/:id` | API key | Metadata; change `visibility` / `name`; soft delete (`204`). |
 | POST | `/v1/files/:id/restore` | API key | Undo a soft delete within the grace period. |
 | POST | `/v1/files/:id/urls?ttl=` | API key | Fresh URLs (signed for private files, `ttl` seconds, max 7 days). |
@@ -70,13 +72,15 @@ Errors are JSON: `{ "error": { "code", "message", "details?" } }`.
 | PUT | `/v1/uploads/:token?name=` | ticket | Direct upload from a browser. Single use, constrained by the ticket. `201` with `file`. |
 | GET / HEAD | `/files/:id/original` | public or `exp`+`sig` | The stored bytes. |
 | GET / HEAD | `/files/:id/:variant` | public or `exp`+`sig` | Image variant as WebP. |
+| GET | `/v1/quarantine` | admin key | Uploads the virus scan rejected: `{ items: [{ id, owner, name, mime, size, sha256, signature, createdAt }] }`. |
+| DELETE | `/v1/quarantine/:id` | admin key | Remove one quarantined upload and its bytes (`204`). |
 | GET | `/metrics` | API key | Prometheus text: files, blobs, bytes, uploads, downloads. |
 
-`file` shape: `{ id, name, mime, size, width, height, sha256, visibility, createdAt, urls: { original, thumb, … } }` where each url is `{ url, expiresAt }` (`expiresAt` null for public files).
+`file` shape: `{ id, name, mime, size, width, height, sha256, visibility, owner, createdAt, urls: { original, thumb, … } }` where each url is `{ url, expiresAt }` (`expiresAt` null for public files).
 
 Delivery headers: strong `ETag` (304 on `If-None-Match`), `Accept-Ranges: bytes` with single-range `206`/`416`, `Cache-Control: public, max-age=31536000, immutable` for public files and `no-store` for private ones, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`. Images are `inline`; PDFs and everything else are `attachment` with `X-Frame-Options: DENY`.
 
-Error codes: `UNSUPPORTED_TYPE` (415), `TOO_LARGE` (413), `INVALID_IMAGE` (422), `EMPTY`, `INVALID_ARGUMENT`, `NOT_AN_IMAGE`, `VALIDATION_FAILED` (400), `INVALID_TICKET`, `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND`, `UNKNOWN_VARIANT` (404), `RATE_LIMITED` (429).
+Error codes: `UNSUPPORTED_TYPE` (415), `TOO_LARGE` (413), `INVALID_IMAGE`, `INFECTED` (422), `SCAN_UNAVAILABLE` (503), `EMPTY`, `INVALID_ARGUMENT`, `NOT_AN_IMAGE`, `VALIDATION_FAILED` (400), `INVALID_TICKET`, `UNAUTHORIZED` (401), `FORBIDDEN` (403), `NOT_FOUND`, `UNKNOWN_VARIANT` (404), `RATE_LIMITED` (429).
 
 ### Typical flows
 
@@ -108,6 +112,8 @@ Required: `MEDIA_API_KEYS`, `PUBLIC_BASE_URL`, `SIGNING_SECRET`. `PUBLIC_BASE_UR
 
 - `STORAGE_DRIVER` (default `local`) — which `Storage` backend to use. `local` (`LocalStorage`) is the only value that exists today; anything else fails startup immediately with a `ConfigError`, never a silent fallback. See "Code layout" for the `Storage` interface itself.
 - `MAX_CONCURRENT_VARIANTS` (default `4`) and `VARIANT_WAIT_TIMEOUT_MS` (default `30000`) — bound CPU-heavy on-demand variant generation; see "Scaling model" below for the exact semantics.
+- `CLAMD_HOST`, `CLAMD_PORT` (default `3310`), `CLAMD_TIMEOUT_MS` (default `30000`), `SCAN_FAIL_OPEN` (default `false`), `QUARANTINE_DAYS` (default `30`) — the optional virus scan; see "Model".
+- `ADMIN_KEYS` — comma-separated key ids from `MEDIA_API_KEYS` with access to every key's files and the quarantine; an unknown id fails startup.
 - `TRASH_GRACE_MS` (default `3600000`, one hour) and `TRASH_MAX_ENTRIES` (default `1000`) — trash reconciliation's age threshold and per-run cap; see "Maintenance" below.
 
 ### Rotating `SIGNING_SECRET`
@@ -218,9 +224,8 @@ trace-id is continued with a fresh span-id for this hop, both logged as `traceId
 orphaned blobs, purges expired upload tickets, and reconciles `trash/` (see below) — on three
 triggers, all running the exact same `MediaService#purge()`: the hourly timer, one eager run at
 startup, and an operator-triggered manual run. There is **no HTTP route** for the manual trigger —
-media's API keys are flat (`id:secret`, no role concept, shared identically by every `/v1/*` route
-including delivery and `/metrics`), so an admin-only route here would either blur that boundary or
-require inventing a role concept for one operation. The manual trigger instead goes through the
+maintenance touches the whole data directory and is an operator task, not something an API
+caller (even an `ADMIN_KEYS` key, whose reach is files and the quarantine) should start. The manual trigger instead goes through the
 `atc-stack` control plane, the same trust boundary `stack backup`/`stack restore` already assume:
 
 ```bash
@@ -238,7 +243,7 @@ the timer and startup-eager runs safe against each other (see `docs/READINESS.md
 race"), not by anything specific to being in the same process — proven directly in
 `test/maintenance-concurrency.test.js` with two fully independent `MediaService` instances sharing
 one real database file and data directory. The result is a bounded, machine-readable, secret- and
-path-free summary: `{ files, blobs, tickets, trashReconciled, trashSkipped, trashErrors, errors }`.
+path-free summary: `{ files, blobs, tickets, trashReconciled, trashSkipped, trashErrors, quarantine, errors }` (`quarantine` = infected uploads older than `QUARANTINE_DAYS` removed).
 
 **Trash reconciliation** (`LocalStorage#reconcileTrash`) closes the one remaining disk leak in the
 purge protocol: `detachForDelete()` quarantines an object's bytes into `trash/<token>.object`(`

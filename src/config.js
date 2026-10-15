@@ -79,6 +79,10 @@ export class Config {
     this.trashGraceMs = v.trashGraceMs;
     this.trashMaxEntries = v.trashMaxEntries;
     this.corsOrigins = v.corsOrigins;
+    this.clamd = v.clamd;
+    this.scanFailOpen = v.scanFailOpen;
+    this.quarantineDays = v.quarantineDays;
+    this.adminKeys = v.adminKeys;
     Object.freeze(this);
   }
 
@@ -116,6 +120,17 @@ export class Config {
     const corsOrigins = r.list('CORS_ORIGINS', '');
     for (const o of corsOrigins) if (o !== '*' && !/^https?:\/\/[^\s/]+$/.test(o)) throw new ConfigError(`CORS_ORIGINS entry "${o}" must be an origin`);
 
+    const apiKeys = Config.#parseApiKeys(r.required('MEDIA_API_KEYS'));
+    const keyIds = apiKeys.map((k) => k.id);
+    const adminKeys = r.list('ADMIN_KEYS', '');
+    for (const id of adminKeys) if (!keyIds.includes(id)) throw new ConfigError(`ADMIN_KEYS names unknown key "${id}"`);
+    const clamdHost = r.optional('CLAMD_HOST');
+    const clamd = clamdHost ? {
+      host: clamdHost,
+      port: r.integer('CLAMD_PORT', 3310, { min: 1, max: 65535 }),
+      timeoutMs: r.integer('CLAMD_TIMEOUT_MS', 30_000, { min: 1_000, max: 600_000 }),
+    } : null;
+
     return new Config({
       port: r.integer('PORT', 3003, { min: 1, max: 65535 }),
       host: r.optional('HOST') || '0.0.0.0',
@@ -127,7 +142,7 @@ export class Config {
       dbBackupDir: r.optional('DB_BACKUP_DIR') || undefined,
       dataDir: r.optional('DATA_DIR') || './data/files',
       publicBaseUrl,
-      apiKeys: Config.#parseApiKeys(r.required('MEDIA_API_KEYS')),
+      apiKeys,
       rateLimitMax: r.integer('RATE_LIMIT_MAX', 600, { min: 1 }),
       signingSecret,
       signingSecretPrevious,
@@ -135,8 +150,8 @@ export class Config {
       maxConcurrentVariants: r.integer('MAX_CONCURRENT_VARIANTS', 4, { min: 1, max: 64 }),
       variantWaitTimeoutMs: r.integer('VARIANT_WAIT_TIMEOUT_MS', 30_000, { min: 1_000, max: 300_000 }),
       maxUploadBytes: r.integer('MAX_UPLOAD_BYTES', 25 * 1024 * 1024, { min: 1024 }),
-      keyMaxUploadBytes: Config.#parseKeyLimits(r.optional('KEY_MAX_UPLOAD_BYTES'), Config.#parseApiKeys(r.required('MEDIA_API_KEYS')).map((k) => k.id), 'KEY_MAX_UPLOAD_BYTES'),
-      keyQuotaBytes: Config.#parseKeyLimits(r.optional('KEY_QUOTA_BYTES'), Config.#parseApiKeys(r.required('MEDIA_API_KEYS')).map((k) => k.id), 'KEY_QUOTA_BYTES'),
+      keyMaxUploadBytes: Config.#parseKeyLimits(r.optional('KEY_MAX_UPLOAD_BYTES'), keyIds, 'KEY_MAX_UPLOAD_BYTES'),
+      keyQuotaBytes: Config.#parseKeyLimits(r.optional('KEY_QUOTA_BYTES'), keyIds, 'KEY_QUOTA_BYTES'),
       defaultQuotaBytes: r.integer('DEFAULT_QUOTA_BYTES', 0, { min: 0 }),
       minFreeBytes: r.integer('MIN_FREE_BYTES', 0, { min: 0 }),
       maxImagePixels: r.integer('MAX_IMAGE_PIXELS', 50_000_000, { min: 10_000 }),
@@ -154,6 +169,10 @@ export class Config {
       trashGraceMs: r.integer('TRASH_GRACE_MS', 3_600_000, { min: 0 }),
       trashMaxEntries: r.integer('TRASH_MAX_ENTRIES', 1_000, { min: 1, max: 100_000 }),
       corsOrigins,
+      clamd,
+      scanFailOpen: r.boolean('SCAN_FAIL_OPEN', false),
+      quarantineDays: r.integer('QUARANTINE_DAYS', 30, { min: 1, max: 3650 }),
+      adminKeys,
     });
   }
 

@@ -43,6 +43,10 @@
  * @property {VariantSpec[]} variants
  * @property {number} variantQuality
  * @property {boolean} stripImageMetadata
+ * @property {{ host: string, port: number, timeoutMs: number }|null} clamd  ClamAV daemon for upload scans; null = no scan.
+ * @property {boolean} scanFailOpen     Accept uploads when clamd cannot be reached (default: refuse with 503).
+ * @property {number} quarantineDays    Infected uploads are kept this long, then purged.
+ * @property {string[]} adminKeys       Key ids that see and manage every key's files and the quarantine.
  * @property {number} signedUrlTtlSec
  * @property {number} uploadTicketTtlSec
  * @property {number} deleteGraceDays

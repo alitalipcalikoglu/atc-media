@@ -16,6 +16,8 @@ export class MediaError extends Error {
     VARIANT_BUSY: 503,
     QUOTA_EXCEEDED: 507,
     STORAGE_FULL: 507,
+    INFECTED: 422,
+    SCAN_UNAVAILABLE: 503,
   };
 
   /**

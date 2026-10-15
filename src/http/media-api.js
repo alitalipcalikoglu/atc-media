@@ -93,12 +93,13 @@ export class MediaApi {
     registerProbes(app, async () => {
       this.db.ping();
       await this.service.storage.check();
+      if (this.service.scanner) await this.service.scanner.ping();
     }, { cacheMs: MediaApi.READY_CACHE_MS });
     registerOpenApi(app, new URL('../../openapi.yaml', import.meta.url));
     registerInfo(app, {
       service: 'atc-media',
       version: this.version,
-      capabilities: ['content-dedup', 'signed-urls', 'ticketed-uploads', 'soft-delete', 'variants'],
+      capabilities: ['content-dedup', 'signed-urls', 'ticketed-uploads', 'soft-delete', 'variants', ...(config.clamd ? ['virus-scan'] : [])],
       schemaVersion: this.db.schemaVersion,
     });
     this.#registerDelivery(app);
@@ -123,6 +124,7 @@ export class MediaApi {
       height: f.height,
       sha256: f.sha256,
       visibility: f.visibility,
+      owner: f.api_key_id,
       createdAt: new Date(f.created_at).toISOString(),
       urls: this.service.urls(f, ttlSec),
     };
@@ -176,6 +178,24 @@ export class MediaApi {
     });
   }
 
+  /**
+   * The owner filter for a request: admin keys (ADMIN_KEYS) see and manage every key's files.
+   * @param {FastifyRequest} request @returns {string|undefined}
+   */
+  #scope(request) {
+    return this.config.adminKeys.includes(request.apiKeyId) ? undefined : request.apiKeyId;
+  }
+
+  /** @param {FastifyRequest} request */
+  #requireAdmin(request) {
+    if (this.#scope(request) !== undefined) throw new MediaError('FORBIDDEN', 'this key is not in ADMIN_KEYS');
+  }
+
+  /** @param {Record<string, any>} q */
+  static #quarantineView(q) {
+    return { id: q.id, owner: q.api_key_id, name: q.name, mime: q.mime, size: q.size, sha256: q.sha256, signature: q.signature, createdAt: new Date(q.created_at).toISOString() };
+  }
+
   /** @param {FastifyInstance} api */
   async #registerV1(api) {
     api.addHook('onRequest', this.auth.hook);
@@ -198,33 +218,34 @@ export class MediaApi {
     api.get('/usage', async (request) => s.usage(request.apiKeyId));
 
     api.get('/files', { schema: { querystring: Schemas.listQuery } }, async (request) => {
-      const q = /** @type {{ limit?: string, cursor?: string }} */ (request.query);
+      const q = /** @type {{ limit?: string, cursor?: string, owner?: string }} */ (request.query);
       const limit = q.limit ? Number(q.limit) : 20;
-      const rows = s.list(request.apiKeyId, { limit: limit + 1, before: q.cursor ? FileCursor.decode(q.cursor) : undefined });
+      const scope = this.#scope(request);
+      const rows = s.list(scope ?? q.owner ?? null, { limit: limit + 1, before: q.cursor ? FileCursor.decode(q.cursor) : undefined });
       const items = rows.slice(0, limit);
       const last = items.at(-1);
       return { items: items.map((f) => this.#view(f)), nextCursor: rows.length > limit && last ? FileCursor.encode(last) : null };
     });
 
     api.get('/files/:id', { schema: { params: Schemas.idParams } }, async (request) => ({
-      file: this.#view(s.get(/** @type {{ id: string }} */ (request.params).id, request.apiKeyId)),
+      file: this.#view(s.get(/** @type {{ id: string }} */ (request.params).id, this.#scope(request))),
     }));
 
     api.patch('/files/:id', { config: { audit: AuditClient.route('atc-media.file.update', (r) => ({ type: 'file', id: /** @type {any} */ (r.params).id }), (r) => ({ patch: r.body })) },  schema: { params: Schemas.idParams, body: Schemas.patchBody } }, async (request) => ({
-      file: this.#view(s.update(/** @type {{ id: string }} */ (request.params).id, request.apiKeyId, /** @type {any} */ (request.body))),
+      file: this.#view(s.update(/** @type {{ id: string }} */ (request.params).id, this.#scope(request), /** @type {any} */ (request.body))),
     }));
 
     api.delete('/files/:id', { config: { audit: AuditClient.route('atc-media.file.delete', (r) => ({ type: 'file', id: /** @type {any} */ (r.params).id })) },  schema: { params: Schemas.idParams } }, async (request, reply) => {
-      s.delete(/** @type {{ id: string }} */ (request.params).id, request.apiKeyId);
+      s.delete(/** @type {{ id: string }} */ (request.params).id, this.#scope(request));
       return reply.code(204).send();
     });
 
     api.post('/files/:id/restore', { config: { audit: AuditClient.route('atc-media.file.restore', (r) => ({ type: 'file', id: /** @type {any} */ (r.params).id })) },  schema: { params: Schemas.idParams } }, async (request) => ({
-      file: this.#view(s.restore(/** @type {{ id: string }} */ (request.params).id, request.apiKeyId)),
+      file: this.#view(s.restore(/** @type {{ id: string }} */ (request.params).id, this.#scope(request))),
     }));
 
     api.post('/files/:id/urls', { schema: { params: Schemas.idParams, querystring: Schemas.signQuery } }, async (request) => {
-      const f = s.get(/** @type {{ id: string }} */ (request.params).id, request.apiKeyId);
+      const f = s.get(/** @type {{ id: string }} */ (request.params).id, this.#scope(request));
       const q = /** @type {{ ttl?: string }} */ (request.query);
       const ttl = q.ttl ? Math.min(Number(q.ttl), 604_800) : undefined;
       return { urls: s.urls(f, ttl) };
@@ -234,6 +255,17 @@ export class MediaApi {
       const body = /** @type {any} */ (request.body ?? {});
       const t = s.createTicket({ apiKeyId: request.apiKeyId, ...body });
       return reply.code(201).send({ ...t, expiresAt: new Date(t.expiresAt).toISOString(), method: 'PUT' });
+    });
+
+    api.get('/quarantine', async (request) => {
+      this.#requireAdmin(request);
+      return { items: s.listQuarantine().map((q) => MediaApi.#quarantineView(q)) };
+    });
+
+    api.delete('/quarantine/:id', { config: { audit: AuditClient.route('atc-media.quarantine.delete', (r) => ({ type: 'quarantine', id: /** @type {any} */ (r.params).id })) }, schema: { params: Schemas.quarantineParams } }, async (request, reply) => {
+      this.#requireAdmin(request);
+      await s.deleteQuarantined(/** @type {{ id: string }} */ (request.params).id);
+      return reply.code(204).send();
     });
   }
 
@@ -248,6 +280,7 @@ export class MediaApi {
         '# HELP media_blobs Stored unique objects.', '# TYPE media_blobs gauge', `media_blobs ${st.blobs}`,
         '# HELP media_stored_bytes Bytes of stored originals.', '# TYPE media_stored_bytes gauge', `media_stored_bytes ${st.bytes}`,
         '# HELP media_storage_free_bytes Free bytes on the data volume (only with MIN_FREE_BYTES set).', '# TYPE media_storage_free_bytes gauge', ...(this.config.minFreeBytes ? [`media_storage_free_bytes ${await this.service.storage.freeBytes() ?? 0}`] : []),
+        '# HELP media_quarantined Infected uploads kept in quarantine.', '# TYPE media_quarantined gauge', `media_quarantined ${this.files.quarantineCount()}`,
         '# HELP media_uploads_total Successful uploads since start.', '# TYPE media_uploads_total counter', `media_uploads_total ${this.counters.uploads}`,
         '# HELP media_downloads_total Delivery requests since start.', '# TYPE media_downloads_total counter', `media_downloads_total ${this.counters.downloads}`,
         '# HELP media_downloaded_bytes_total Bytes requested since start.', '# TYPE media_downloaded_bytes_total counter', `media_downloaded_bytes_total ${this.counters.bytesOut}`,
