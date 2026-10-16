@@ -99,8 +99,10 @@ test('PUT /v1/files stores a raw body, GET/PATCH/DELETE/restore manage it', asyn
   assert.equal((await app.inject(`/files/${file.id}/original`)).statusCode, 404, 'deleted files are not served');
   res = await call('POST', `/v1/files/${file.id}/restore`, { headers: { 'idempotency-key': 'restore-file-1' } });
   assert.equal(res.statusCode, 200);
-  const replay = await call('POST', `/v1/files/${file.id}/restore`, { headers: { 'idempotency-key': 'restore-file-1' } });
-  assert.deepEqual([replay.statusCode, replay.headers['idempotent-replayed']], [200, 'true'], 'a retried restore replays instead of failing');
+  assert.ok(res.json().file.urls, 'the restore answer carries signed URLs');
+  const again = await call('POST', `/v1/files/${file.id}/restore`, { headers: { 'idempotency-key': 'restore-file-1' } });
+  assert.deepEqual([again.statusCode, again.headers['idempotent-replayed']], [200, undefined], 'a repeated restore is a fresh no-op answer, never a replay (signed URLs are not stored)');
+  assert.equal(/** @type {any} */ (t.db.raw.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE name = 'service_idempotency'").get()).n, 0, 'media keeps no replay store at all');
   assert.match(file.id, /^fil_[0-9a-z]{6,12}[0-9a-f]{16}$/);
   assert.equal((await call('GET', `/v1/files/${file.id}`)).statusCode, 200);
   const t1 = await call('POST', '/v1/uploads', { payload: {}, headers: { 'idempotency-key': 'ticket-key-1' } });

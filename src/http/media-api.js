@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { AuditClient } from '@atc-web/atc-service-core/audit';
-import { Idempotency } from '@atc-web/atc-service-core/idempotency';
 import { createErrorHandler, registerInfo, registerOpenApi, registerProbes, registerRequestContext, requestOptions } from '@atc-web/atc-service-core/fastify';
 import { MediaError } from '../domain/errors.js';
 import { TicketStore } from '../store/ticket-store.js';
@@ -87,8 +86,6 @@ export class MediaApi {
       },
     }));
     app.addHook('onSend', AuditClient.hook(this.audit));
-    // Opt-in per route; ticket and signed-URL routes answer with credentials and never take part.
-    Idempotency.register(app, { raw: this.db.raw });
     app.setNotFoundHandler((_request, reply) => {
       reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'route not found' } });
     });
@@ -243,7 +240,8 @@ export class MediaApi {
       return reply.code(204).send();
     });
 
-    api.post('/files/:id/restore', { config: { idempotent: true, audit: AuditClient.route('atc-media.file.restore', (r) => ({ type: 'file', id: /** @type {any} */ (r.params).id })) },  schema: { params: Schemas.idParams } }, async (request) => ({
+    // Not idempotent on purpose: the answer carries signed URLs, which must never sit in the replay store.
+    api.post('/files/:id/restore', { config: { audit: AuditClient.route('atc-media.file.restore', (r) => ({ type: 'file', id: /** @type {any} */ (r.params).id })) },  schema: { params: Schemas.idParams } }, async (request) => ({
       file: this.#view(s.restore(/** @type {{ id: string }} */ (request.params).id, this.#scope(request))),
     }));
 

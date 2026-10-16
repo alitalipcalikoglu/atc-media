@@ -77,7 +77,7 @@ Upload is naturally idempotent by content: two uploads of identical bytes dedupe
 `blobs` row (sha256), and `commit()` discards the redundant temp file rather than writing a second
 copy. Upload tickets are single-use (a conditional `UPDATE`, not retried as if reusable). Delete is
 soft (safe to repeat: a second delete of an already-deleted file is a no-op, not an error) and
-restore likewise.
+restore likewise (and restore deliberately does not replay by `Idempotency-Key`: its answer holds signed URLs).
 
 ## Backup
 

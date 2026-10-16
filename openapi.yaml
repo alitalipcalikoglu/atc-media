@@ -382,7 +382,6 @@ paths:
         - ApiKeyAuth: []
       x-stack-visibility: authenticated
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - $ref: '#/components/parameters/FileId'
       responses:
         '200':
@@ -818,12 +817,6 @@ components:
         cannot reveal whether, or which, key matched.
 
   parameters:
-    IdempotencyKeyHeader:
-      name: Idempotency-Key
-      in: header
-      required: false
-      description: "Optional. Repeats of this POST with the same key (per API key, 24 h) replay the first 2xx answer with `Idempotent-Replayed: true` instead of running again; the same key with another method, path or body is `409 IDEMPOTENCY_MISMATCH`, while the first still runs `409 IDEMPOTENCY_IN_PROGRESS`."
-      schema: { type: string, pattern: '^[A-Za-z0-9._:-]{8,255}$' }
     FileId:
       name: id
       in: path
