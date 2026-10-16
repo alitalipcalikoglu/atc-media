@@ -97,9 +97,15 @@ test('PUT /v1/files stores a raw body, GET/PATCH/DELETE/restore manage it', asyn
   assert.equal((await call('DELETE', `/v1/files/${file.id}`)).statusCode, 204);
   assert.equal((await call('GET', `/v1/files/${file.id}`)).statusCode, 404);
   assert.equal((await app.inject(`/files/${file.id}/original`)).statusCode, 404, 'deleted files are not served');
-  res = await call('POST', `/v1/files/${file.id}/restore`);
+  res = await call('POST', `/v1/files/${file.id}/restore`, { headers: { 'idempotency-key': 'restore-file-1' } });
   assert.equal(res.statusCode, 200);
+  const replay = await call('POST', `/v1/files/${file.id}/restore`, { headers: { 'idempotency-key': 'restore-file-1' } });
+  assert.deepEqual([replay.statusCode, replay.headers['idempotent-replayed']], [200, 'true'], 'a retried restore replays instead of failing');
+  assert.match(file.id, /^fil_[0-9a-z]{6,12}[0-9a-f]{16}$/);
   assert.equal((await call('GET', `/v1/files/${file.id}`)).statusCode, 200);
+  const t1 = await call('POST', '/v1/uploads', { payload: {}, headers: { 'idempotency-key': 'ticket-key-1' } });
+  const t2 = await call('POST', '/v1/uploads', { payload: {}, headers: { 'idempotency-key': 'ticket-key-1' } });
+  assert.notEqual(t1.json().token, t2.json().token, 'ticket tokens are never replayed');
 });
 
 test('delivery: public direct, private signed, ETag, Range, HEAD, variants, security headers', async () => {

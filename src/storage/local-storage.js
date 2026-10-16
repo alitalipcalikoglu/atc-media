@@ -212,7 +212,7 @@ export class LocalStorage extends Storage {
 
   /** @param {string} id */
   #quarantinePath(id) {
-    if (!/^q_[0-9a-z]{6,12}[0-9a-f]{12}$/.test(id)) throw new Error('invalid quarantine id');
+    if (!/^qua_[0-9a-z]{6,12}[0-9a-f]{16}$/.test(id)) throw new Error('invalid quarantine id');
     return join(this.dataDir, 'quarantine', id);
   }
 

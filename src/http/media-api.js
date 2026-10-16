@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { AuditClient } from '@atc-web/atc-service-core/audit';
+import { Idempotency } from '@atc-web/atc-service-core/idempotency';
 import { createErrorHandler, registerInfo, registerOpenApi, registerProbes, registerRequestContext, requestOptions } from '@atc-web/atc-service-core/fastify';
 import { MediaError } from '../domain/errors.js';
 import { TicketStore } from '../store/ticket-store.js';
@@ -25,7 +26,7 @@ class FileCursor {
 
   /** @param {string} cursor */
   static decode(cursor) {
-    const m = /^(\d{1,16}):([0-9a-f-]{36})$/.exec(Buffer.from(cursor, 'base64url').toString());
+    const m = /^(\d{1,16}):((?:fil|qua)_[0-9a-z]{6,12}[0-9a-f]{16})$/.exec(Buffer.from(cursor, 'base64url').toString());
     if (!m) throw new MediaError('INVALID_ARGUMENT', 'invalid cursor');
     return { createdAt: Number(m[1]), id: m[2] };
   }
@@ -86,6 +87,8 @@ export class MediaApi {
       },
     }));
     app.addHook('onSend', AuditClient.hook(this.audit));
+    // Opt-in per route; ticket and signed-URL routes answer with credentials and never take part.
+    Idempotency.register(app, { raw: this.db.raw });
     app.setNotFoundHandler((_request, reply) => {
       reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'route not found' } });
     });
@@ -240,7 +243,7 @@ export class MediaApi {
       return reply.code(204).send();
     });
 
-    api.post('/files/:id/restore', { config: { audit: AuditClient.route('atc-media.file.restore', (r) => ({ type: 'file', id: /** @type {any} */ (r.params).id })) },  schema: { params: Schemas.idParams } }, async (request) => ({
+    api.post('/files/:id/restore', { config: { idempotent: true, audit: AuditClient.route('atc-media.file.restore', (r) => ({ type: 'file', id: /** @type {any} */ (r.params).id })) },  schema: { params: Schemas.idParams } }, async (request) => ({
       file: this.#view(s.restore(/** @type {{ id: string }} */ (request.params).id, this.#scope(request))),
     }));
 
@@ -257,9 +260,14 @@ export class MediaApi {
       return reply.code(201).send({ ...t, expiresAt: new Date(t.expiresAt).toISOString(), method: 'PUT' });
     });
 
-    api.get('/quarantine', async (request) => {
+    api.get('/quarantine', { schema: { querystring: Schemas.quarantineQuery } }, async (request) => {
       this.#requireAdmin(request);
-      return { items: s.listQuarantine().map((q) => MediaApi.#quarantineView(q)) };
+      const q = /** @type {{ limit?: string, cursor?: string }} */ (request.query);
+      const limit = q.limit ? Number(q.limit) : 50;
+      const rows = s.listQuarantine({ limit: limit + 1, before: q.cursor ? FileCursor.decode(q.cursor) : undefined });
+      const items = rows.slice(0, limit);
+      const last = items.at(-1);
+      return { items: items.map((x) => MediaApi.#quarantineView(x)), nextCursor: rows.length > limit && last ? FileCursor.encode(/** @type {any} */ (last)) : null };
     });
 
     api.delete('/quarantine/:id', { config: { audit: AuditClient.route('atc-media.quarantine.delete', (r) => ({ type: 'quarantine', id: /** @type {any} */ (r.params).id })) }, schema: { params: Schemas.quarantineParams } }, async (request, reply) => {

@@ -37,7 +37,7 @@ curl -X PUT "$MEDIA/v1/files?name=eicar.csv" -H "Authorization: Bearer $KEY" --d
 
 ```json
 { "error": { "code": "INFECTED", "message": "the file contains malware (Eicar-Test-Signature); it was quarantined",
-  "details": { "quarantineId": "q_mgx1k2abc0123456789ab", "signature": "Eicar-Test-Signature" } } }
+  "details": { "quarantineId": "qua_mgx1k2ab0123456789abcdef", "signature": "Eicar-Test-Signature" } } }
 ```
 
 Status `422`. No file record is created, the key's quota is not charged, and the bytes move to `DATA_DIR/quarantine/<id>`. They are never served.
@@ -49,14 +49,14 @@ curl "$MEDIA/v1/quarantine" -H "Authorization: Bearer $ADMIN_KEY"
 ```
 
 ```json
-{ "items": [ { "id": "q_mgx1k2abc0123456789ab", "owner": "shop-backend", "name": "eicar.csv", "mime": "text/csv",
+{ "items": [ { "id": "qua_mgx1k2ab0123456789abcdef", "owner": "shop-backend", "name": "eicar.csv", "mime": "text/csv",
   "size": 68, "sha256": "275a02…", "signature": "Eicar-Test-Signature", "createdAt": "2026-10-16T09:12:00.000Z" } ] }
 ```
 
 Delete one after review (`204`); maintenance removes the rest after `QUARANTINE_DAYS`:
 
 ```bash
-curl -X DELETE "$MEDIA/v1/quarantine/q_mgx1k2abc0123456789ab" -H "Authorization: Bearer $ADMIN_KEY"
+curl -X DELETE "$MEDIA/v1/quarantine/qua_mgx1k2ab0123456789abcdef" -H "Authorization: Bearer $ADMIN_KEY"
 ```
 
 A non-admin key gets `403 FORBIDDEN` on both routes.

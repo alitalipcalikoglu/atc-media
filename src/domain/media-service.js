@@ -1,4 +1,5 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { Ids } from '@atc-web/atc-service-core/ids';
 import { buffer as streamToBuffer } from 'node:stream/consumers';
 import { UploadError } from '../storage/storage.js';
 import { TypeSniffer } from '../storage/type-sniffer.js';
@@ -165,7 +166,7 @@ export class MediaService {
           if (!this.options.scanFailOpen) throw new MediaError('SCAN_UNAVAILABLE', 'the virus scanner cannot be reached; try again later');
         }
         if (verdict && !verdict.clean) {
-          const id = `q_${this.now().toString(36)}${randomBytes(6).toString('hex')}`;
+          const id = Ids.create('qua', this.now());
           const name = FileName.sanitize(o.name, mime);
           await this.storage.quarantine(/** @type {any} */ (tempKey), id);
           this.files.quarantineAdd({ id, apiKeyId: o.apiKeyId, name, mime, size, sha256, signature: /** @type {string} */ (verdict.signature) }, this.now());
@@ -527,9 +528,12 @@ export class MediaService {
     return { files, blobs: confirmed.length, tickets, trashReconciled, trashSkipped, trashErrors, quarantine };
   }
 
-  /** Infected uploads kept for review, newest first. */
-  listQuarantine(limit = 200) {
-    return this.files.quarantined(limit);
+  /**
+   * Infected uploads kept for review, newest first.
+   * @param {{ limit: number, before?: { createdAt: number, id: string } }} q
+   */
+  listQuarantine(q) {
+    return this.files.quarantined(q);
   }
 
   /** Delete one quarantined upload (record and bytes). @param {string} id */

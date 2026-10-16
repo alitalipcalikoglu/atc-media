@@ -5,7 +5,7 @@ Public files are fetched straight from the service (or through the gateway/CDN) 
 ## Original
 
 ```bash
-curl -sI $MEDIA/files/73effd37-…/original
+curl -sI $MEDIA/files/fil_mgx1k2ab…/original
 ```
 
 ```
@@ -27,8 +27,8 @@ Objects are content-addressed and never change, hence the one-year immutable cac
 Presets come from `VARIANTS` (default `thumb:200x200:cover,small:400,medium:800,large:1600`). Served as WebP, generated on first request, cached on disk, never upscaled.
 
 ```bash
-curl -s $MEDIA/files/73effd37-…/thumb -o thumb.webp     # 200×200, cropped to cover
-curl -s $MEDIA/files/73effd37-…/medium -o medium.webp   # 800 px wide, aspect kept
+curl -s $MEDIA/files/fil_mgx1k2ab…/thumb -o thumb.webp     # 200×200, cropped to cover
+curl -s $MEDIA/files/fil_mgx1k2ab…/medium -o medium.webp   # 800 px wide, aspect kept
 ```
 
 `content-disposition` names them `<stem>-<variant>.webp`. Unknown variant → `404 UNKNOWN_VARIANT`; variant of a PDF → `400 NOT_AN_IMAGE`. Only configured presets exist, so clients cannot make the server encode arbitrary sizes.
@@ -42,14 +42,14 @@ Responsive images:
 ## Conditional requests
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' -H 'If-None-Match: "56e12953450bdf743c234ab2efe95ea7-original"' $MEDIA/files/73effd37-…/original
+curl -s -o /dev/null -w '%{http_code}\n' -H 'If-None-Match: "56e12953450bdf743c234ab2efe95ea7-original"' $MEDIA/files/fil_mgx1k2ab…/original
 # 304
 ```
 
 ## Range requests
 
 ```bash
-curl -s -H 'Range: bytes=0-1023' $MEDIA/files/73effd37-…/original -o first-kb.bin -w '%{http_code}\n'   # 206
+curl -s -H 'Range: bytes=0-1023' $MEDIA/files/fil_mgx1k2ab…/original -o first-kb.bin -w '%{http_code}\n'   # 206
 curl -s -H 'Range: bytes=-500' … -w '%{http_code}\n'        # 206, last 500 bytes
 curl -s -H 'Range: bytes=999999999-' … -w '%{http_code}\n'  # 416, Content-Range: bytes */48213
 ```

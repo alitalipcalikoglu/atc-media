@@ -382,6 +382,7 @@ paths:
         - ApiKeyAuth: []
       x-stack-visibility: authenticated
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
         - $ref: '#/components/parameters/FileId'
       responses:
         '200':
@@ -497,10 +498,21 @@ paths:
       operationId: atc-media.quarantine.list
       tags: [Quarantine]
       summary: List quarantined uploads
-      description: Newest first, at most 200. The bytes stay on disk until deleted here or purged after `QUARANTINE_DAYS`; they are never served.
+      description: Newest first, keyset-paged. The bytes stay on disk until deleted here or purged after `QUARANTINE_DAYS`; they are never served.
       security:
         - ApiKeyAuth: []
       x-stack-visibility: authenticated
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: "Page size, 1-200. Default 50."
+          schema: { type: string, pattern: '^([1-9]|[1-9][0-9]|1[0-9][0-9]|200)$' }
+        - name: cursor
+          in: query
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          schema: { type: string, maxLength: 128 }
       responses:
         '200':
           description: Quarantined uploads.
@@ -508,11 +520,12 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, nextCursor]
                 properties:
                   items:
                     type: array
                     items: { $ref: '#/components/schemas/QuarantineItem' }
+                  nextCursor: { type: [string, 'null'] }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -533,7 +546,7 @@ paths:
         - name: id
           in: path
           required: true
-          schema: { type: string, pattern: '^q_[0-9a-z]{6,12}[0-9a-f]{12}$' }
+          schema: { type: string, pattern: '^qua_[0-9a-z]{6,12}[0-9a-f]{16}$' }
       responses:
         '204':
           description: Deleted.
@@ -805,6 +818,12 @@ components:
         cannot reveal whether, or which, key matched.
 
   parameters:
+    IdempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: "Optional. Repeats of this POST with the same key (per API key, 24 h) replay the first 2xx answer with `Idempotent-Replayed: true` instead of running again; the same key with another method, path or body is `409 IDEMPOTENCY_MISMATCH`, while the first still runs `409 IDEMPOTENCY_IN_PROGRESS`."
+      schema: { type: string, pattern: '^[A-Za-z0-9._:-]{8,255}$' }
     FileId:
       name: id
       in: path
@@ -909,7 +928,8 @@ components:
 
     FileId:
       type: string
-      format: uuid
+      pattern: '^fil_[0-9a-z]{6,12}[0-9a-f]{16}$'
+      description: The platform's one id format, `fil_<base36 time><16 hex>`.
 
     Visibility:
       type: string
@@ -973,7 +993,7 @@ components:
       type: object
       required: [id, owner, name, mime, size, sha256, signature, createdAt]
       properties:
-        id: { type: string, pattern: '^q_[0-9a-z]{6,12}[0-9a-f]{12}$' }
+        id: { type: string, pattern: '^qua_[0-9a-z]{6,12}[0-9a-f]{16}$' }
         owner: { type: string, description: Key id that uploaded it. }
         name: { type: string }
         mime: { type: [string, 'null'] }

@@ -18,7 +18,7 @@ curl -s -X PUT "$MEDIA/v1/files?visibility=public" \
 
 ```json
 { "file": {
-  "id": "73effd37-6dc0-4259-950d-7609eaf6d1f3",
+  "id": "fil_mgx1k2ab0123456789abcdef",
   "name": "ürün fotoğrafı.jpg",
   "mime": "image/jpeg",
   "size": 48213,
@@ -27,8 +27,8 @@ curl -s -X PUT "$MEDIA/v1/files?visibility=public" \
   "visibility": "public",
   "createdAt": "2026-09-16T04:08:28.791Z",
   "urls": {
-    "original": { "url": "https://media.example.com/files/73effd37-…/original", "expiresAt": null },
-    "thumb":    { "url": "https://media.example.com/files/73effd37-…/thumb", "expiresAt": null },
+    "original": { "url": "https://media.example.com/files/fil_mgx1k2ab…/original", "expiresAt": null },
+    "thumb":    { "url": "https://media.example.com/files/fil_mgx1k2ab…/thumb", "expiresAt": null },
     "small":    { "url": "…/small", "expiresAt": null },
     "medium":   { "url": "…/medium", "expiresAt": null },
     "large":    { "url": "…/large", "expiresAt": null }

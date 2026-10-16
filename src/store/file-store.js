@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { Ids } from '@atc-web/atc-service-core/ids';
 
 /** @typedef {{ sha256: string, delete_token: string }} MarkedBlobRow */
 
@@ -26,7 +27,7 @@ export class FileStore {
       fileById: db.prepare(`${FileStore.SELECT} WHERE f.id = ?`),
       fileListAll: db.prepare(`${FileStore.SELECT} WHERE f.deleted_at IS NULL AND (f.created_at < ? OR (f.created_at = ? AND f.id < ?)) ORDER BY f.created_at DESC, f.id DESC LIMIT ?`),
       quarantineInsert: db.prepare('INSERT INTO quarantine (id, api_key_id, name, mime, size, sha256, signature, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'),
-      quarantineList: db.prepare('SELECT * FROM quarantine ORDER BY created_at DESC, id DESC LIMIT ?'),
+      quarantineList: db.prepare('SELECT * FROM quarantine WHERE created_at < ? OR (created_at = ? AND id < ?) ORDER BY created_at DESC, id DESC LIMIT ?'),
       quarantineGet: db.prepare('SELECT * FROM quarantine WHERE id = ?'),
       quarantineDelete: db.prepare('DELETE FROM quarantine WHERE id = ?'),
       quarantineCount: db.prepare('SELECT COUNT(*) AS n FROM quarantine'),
@@ -61,7 +62,7 @@ export class FileStore {
    * @returns {FileRecord}
    */
   createFile({ apiKeyId, blob, name, visibility }, now = Date.now()) {
-    const id = randomUUID();
+    const id = Ids.create('fil');
     this.db.transaction(() => {
       this.stmt.blobUpsert.run(blob.sha256, blob.size, blob.mime, blob.width, blob.height, now);
       this.stmt.fileInsert.run(id, apiKeyId, blob.sha256, name, visibility, now);
@@ -93,8 +94,8 @@ export class FileStore {
 
   /** @param {{ id: string, apiKeyId: string, name: string, mime: string|null, size: number, sha256: string, signature: string }} q @param {number} now */
   quarantineAdd(q, now) { this.stmt.quarantineInsert.run(q.id, q.apiKeyId, q.name, q.mime, q.size, q.sha256, q.signature, now); }
-  /** @param {number} limit @returns {Record<string, any>[]} */
-  quarantined(limit) { return /** @type {any} */ (this.stmt.quarantineList.all(limit)); }
+  /** @param {{ limit: number, before?: { createdAt: number, id: string } }} q @returns {Record<string, any>[]} */
+  quarantined({ limit, before = { createdAt: Number.MAX_SAFE_INTEGER, id: '￿' } }) { return /** @type {any} */ (this.stmt.quarantineList.all(before.createdAt, before.createdAt, before.id, limit)); }
   /** @param {string} id @returns {Record<string, any>|undefined} */
   quarantinedOne(id) { return /** @type {any} */ (this.stmt.quarantineGet.get(id)); }
   /** @param {string} id */

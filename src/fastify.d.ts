@@ -6,6 +6,8 @@ declare module 'fastify' {
     apiKeyId: string;
   }
   interface FastifyContextConfig {
+    /** Opt in to Idempotency-Key replay (core Idempotency); never on routes answering with secrets. */
+    idempotent?: boolean;
     audit?: import('@atc-web/atc-service-core/audit').AuditRouteConfig;
   }
 }

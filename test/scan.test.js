@@ -76,10 +76,12 @@ test('infected upload: 422 INFECTED, quarantined, admin lists and deletes it', a
   const err = res.json().error;
   assert.equal(err.code, 'INFECTED');
   const qid = err.details.quarantineId;
-  assert.match(qid, /^q_/);
+  assert.match(qid, /^qua_[0-9a-z]{6,12}[0-9a-f]{16}$/);
   assert.equal((await app.inject({ url: '/v1/quarantine', headers: user })).statusCode, 403);
-  const list = (await app.inject({ url: '/v1/quarantine', headers: admin })).json().items;
+  const page = (await app.inject({ url: '/v1/quarantine?limit=1', headers: admin })).json();
+  const list = page.items;
   assert.equal(list.length, 1);
+  assert.equal(page.nextCursor, null);
   assert.equal(list[0].owner, 'other');
   assert.equal(list[0].signature, 'Eicar-Test-Signature');
   assert.equal((await app.inject({ url: '/v1/files', headers: user })).json().items.every((/** @type {any} */ f) => f.name !== 'bad.csv'), true);

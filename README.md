@@ -45,6 +45,7 @@ npm run typecheck
 - **Storage is content-addressed.** Identical bytes are stored once; files are named references to a blob. Deleting a file is soft; bytes disappear after `DELETE_GRACE_DAYS`, when no file references the blob any more.
 - **Variants** are presets from `VARIANTS` (`thumb:200x200:cover`, `medium:800`, …), generated on first request, cached on disk, served as WebP, never enlarged.
 - **Virus scan (optional).** With `CLAMD_HOST` set, every upload (API and ticket) is streamed to a ClamAV daemon before it is stored. Malware is refused with `422 INFECTED` and the bytes move to the quarantine (`DATA_DIR/quarantine/`), never served, listed for admin keys and purged after `QUARANTINE_DAYS`. When clamd cannot be asked the upload is refused with `503 SCAN_UNAVAILABLE`, unless `SCAN_FAIL_OPEN=true`. `/ready` pings clamd.
+- **Conventions.** File ids are `fil_<time><random>`, quarantine ids `qua_…` (the platform's one id format). Lists answer `{ items, nextCursor }`. `POST /v1/files/:id/restore` honours `Idempotency-Key` (the first 2xx answer replays for 24 h to the same key and caller); ticket and signed-URL routes answer with credentials and never replay.
 - **Admin keys.** Key ids in `ADMIN_KEYS` see every key's files (`GET /v1/files?owner=` narrows), may rename, delete and restore them, and manage the quarantine. Other keys only ever see their own files; every file view carries its `owner`.
 - **Visibility.** `public` files have stable URLs with immutable caching. `private` files need `exp` and `sig` query parameters; signatures are bound to file id, variant and expiry.
 
@@ -72,7 +73,7 @@ Errors are JSON: `{ "error": { "code", "message", "details?" } }`.
 | PUT | `/v1/uploads/:token?name=` | ticket | Direct upload from a browser. Single use, constrained by the ticket. `201` with `file`. |
 | GET / HEAD | `/files/:id/original` | public or `exp`+`sig` | The stored bytes. |
 | GET / HEAD | `/files/:id/:variant` | public or `exp`+`sig` | Image variant as WebP. |
-| GET | `/v1/quarantine` | admin key | Uploads the virus scan rejected: `{ items: [{ id, owner, name, mime, size, sha256, signature, createdAt }] }`. |
+| GET | `/v1/quarantine?limit=&cursor=` | admin key | Uploads the virus scan rejected: `{ items: [{ id, owner, name, mime, size, sha256, signature, createdAt }], nextCursor }`. |
 | DELETE | `/v1/quarantine/:id` | admin key | Remove one quarantined upload and its bytes (`204`). |
 | GET | `/metrics` | API key | Prometheus text: files, blobs, bytes, uploads, downloads. |
 
