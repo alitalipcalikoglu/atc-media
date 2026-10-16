@@ -13,7 +13,10 @@ scanning, resumable/multipart uploads.
 ## Dependencies
 
 audit (`AUDIT_URL`/`AUDIT_API_KEY`), optional, both-or-neither: forwards upload/update/delete/
-restore/ticket events. Nothing else.
+restore/ticket events. clamd (`CLAMD_HOST` + `CLAMD_PORT`, `CLAMD_TIMEOUT_MS`), optional: every
+upload is streamed to a ClamAV daemon (INSTREAM); an infected file is quarantined for
+`QUARANTINE_DAYS`, and while clamd is unreachable uploads are refused with 503 unless
+`SCAN_FAIL_OPEN=true`. Nothing else.
 
 ## Persistence
 
